@@ -16,6 +16,12 @@ const adminSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  fullName: {
+    type: String,
+  },
+  profilePicture: {
+    type: String,
+  },
   otp: {
     type: String,
   },

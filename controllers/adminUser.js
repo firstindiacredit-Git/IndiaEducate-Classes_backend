@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const Admin = require('../model/adminModel');
 const { sendOTPEmail } = require('../utils/emailService');
+const { uploadMiddleware } = require('../utils/multerConfig');
+const { s3Upload } = require('../utils/s3Config');
 
 const router = express.Router();
 
@@ -145,6 +147,62 @@ router.post('/reset-password', async (req, res) => {
     admin.otpExpires = undefined;
     await admin.save();
     res.json({ message: 'Password reset successful' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get Admin Profile
+router.post('/profile', async (req, res) => {
+  try {
+    const { emailOrPhone } = req.body;
+    if (!emailOrPhone) {
+      return res.status(400).json({ message: 'Email or phone required' });
+    }
+
+    const admin = await Admin.findOne({
+      $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+    }).select('-password -otp -otpExpires');
+
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
+    res.json(admin);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Update Admin Profile
+router.put('/profile', uploadMiddleware, async (req, res) => {
+  try {
+    const { emailOrPhone, fullName } = req.body;
+    if (!emailOrPhone) {
+      return res.status(400).json({ message: 'Email or phone required' });
+    }
+
+    const admin = await Admin.findOne({
+      $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+    });
+
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
+    // Update profile picture if provided
+    if (req.file) {
+      admin.profilePicture = req.file.location;
+    }
+
+    // Update other fields
+    if (fullName) admin.fullName = fullName;
+
+    await admin.save();
+    
+    // Return updated profile without sensitive information
+    const updatedProfile = await Admin.findById(admin._id).select('-password -otp -otpExpires');
+    res.json({ message: 'Profile updated successfully', profile: updatedProfile });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
