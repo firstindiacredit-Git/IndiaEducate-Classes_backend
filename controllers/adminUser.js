@@ -2,7 +2,8 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const Admin = require('../model/adminModel');
-const { sendOTPEmail } = require('../utils/emailService');
+const Student = require('../model/studentModel');
+const { sendOTPEmail, sendCredentialsEmail, sendProfileUpdateEmail } = require('../utils/emailService');
 const { uploadMiddleware } = require('../utils/multerConfig');
 const { s3Upload } = require('../utils/s3Config');
 
@@ -203,6 +204,177 @@ router.put('/profile', uploadMiddleware, async (req, res) => {
     // Return updated profile without sensitive information
     const updatedProfile = await Admin.findById(admin._id).select('-password -otp -otpExpires');
     res.json({ message: 'Profile updated successfully', profile: updatedProfile });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get All Students
+router.get('/students', async (req, res) => {
+  try {
+    const students = await Student.find()
+      .select('-password -otp -otpExpires')
+      .sort({ createdAt: -1 });
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Delete Student
+router.delete('/students/:id', async (req, res) => {
+  try {
+    const student = await Student.findByIdAndDelete(req.params.id);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    res.json({ message: 'Student deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Add Student Directly (Without OTP)
+router.post('/add-student', async (req, res) => {
+  try {
+    const { email, phone, password, fullName, country, enrollmentId, program } = req.body;
+    
+    // Check required fields
+    if (!email || !phone || !password) {
+      return res.status(400).json({ message: 'Email, phone and password are required' });
+    }
+
+    // Check if student already exists
+    const existing = await Student.findOne({ $or: [{ email }, { phone }] });
+    if (existing) {
+      return res.status(400).json({ message: 'Email or phone already registered' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create student with verified status
+    const student = await Student.create({
+      email,
+      phone,
+      password: hashedPassword,
+      fullName,
+      country,
+      enrollmentId,
+      program,
+      isVerified: true // Auto verify since admin is creating
+    });
+
+    // Send credentials to student's email
+    try {
+      await sendCredentialsEmail(email, email, password);
+    } catch (emailError) {
+      console.error('Failed to send credentials email:', emailError);
+      // Don't return error to admin, just log it
+    }
+
+    // Return student without sensitive info
+    const studentData = await Student.findById(student._id)
+      .select('-password -otp -otpExpires');
+
+    res.status(201).json({ 
+      message: 'Student added successfully and credentials sent to email',
+      student: studentData
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Update Student by Admin
+router.put('/update-student/:id', async (req, res) => {
+  try {
+    const { 
+      email, 
+      phone, 
+      fullName, 
+      country, 
+      enrollmentId, 
+      program,
+      password // Optional: only if admin wants to update password
+    } = req.body;
+
+    // Find student
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Check if new email or phone already exists for other students
+    if (email !== student.email || phone !== student.phone) {
+      const existing = await Student.findOne({
+        $and: [
+          { _id: { $ne: student._id } }, // Exclude current student
+          { $or: [{ email }, { phone }] }
+        ]
+      });
+
+      if (existing) {
+        return res.status(400).json({ 
+          message: 'Email or phone number already registered with another student' 
+        });
+      }
+    }
+
+    // Update basic fields
+    student.email = email;
+    student.phone = phone;
+    student.fullName = fullName;
+    student.country = country;
+    student.enrollmentId = enrollmentId;
+    student.program = program;
+
+    // Update password if provided
+    let newPassword = null;
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      student.password = hashedPassword;
+      newPassword = password; // Store for email notification
+    }
+
+    await student.save();
+
+    // Send email notification
+    try {
+      await sendProfileUpdateEmail(email, student, newPassword);
+    } catch (emailError) {
+      console.error('Failed to send update email:', emailError);
+    }
+
+    // Return updated student without sensitive info
+    const updatedStudent = await Student.findById(student._id)
+      .select('-password -otp -otpExpires');
+
+    res.json({ 
+      message: 'Student updated successfully and notification email sent',
+      student: updatedStudent 
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get Dashboard Stats
+router.get('/dashboard-stats', async (req, res) => {
+  try {
+    // Get total number of students
+    const totalStudents = await Student.countDocuments();
+
+    // For now, setting static values for other stats
+    // You can modify these based on your actual data models
+    const stats = {
+      totalStudents,
+      activeCourses: 8,
+      completedSessions: 48,
+      upcomingSessions: 12
+    };
+
+    res.json(stats);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
