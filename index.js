@@ -35,9 +35,16 @@ app.get('/test', (req, res) => {
 });
 
 // Add your API routes here
-app.use('/api/student', require('./controllers/studentUser'));
-app.use('/api/admin', require('./controllers/adminUser'));
-// app.use('/api/students', require('./routes/studentRoutes'));
+const adminRoutes = require('./controllers/adminUser');
+const studentRoutes = require('./controllers/studentUser');
+const classScheduleRoutes = require('./controllers/classScheduleController');
+const attendanceRoutes = require('./controllers/attendanceController');
+
+// Routes
+app.use('/api/admin', adminRoutes);
+app.use('/api/student', studentRoutes);
+app.use('/api/classes', classScheduleRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;
