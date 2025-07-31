@@ -57,7 +57,9 @@ const updateClassStatuses = async () => {
       const endTime = new Date(startTime.getTime() + (classItem.duration * 60000));
       
       if (now > endTime) {
-        // console.log(`Class ${classItem._id} has completed its duration`);
+        console.log(`Class ${classItem._id} has completed its duration. Auto-ending meeting...`);
+        
+        // Auto-end the Jitsi meeting by updating status
         await ClassSchedule.findByIdAndUpdate(classItem._id, {
           status: 'completed',
           meetingId: null,
@@ -66,7 +68,10 @@ const updateClassStatuses = async () => {
           updatedAt: now
         });
 
-        // Update attendance for students who didn't attend
+        // Send notification to all participants (if needed)
+        console.log(`Meeting for class ${classItem.title} has been automatically ended due to time completion.`);
+
+        // Update attendance for all students in this program
         const allStudents = await Student.find({ program: classItem.program });
         const attendance = await Attendance.find({ classId: classItem._id });
 
@@ -76,13 +81,52 @@ const updateClassStatuses = async () => {
           );
 
           if (!studentAttendance) {
-            await Attendance.create({
-              classId: classItem._id,
-              studentId: student._id,
-              status: 'absent',
-              joinTime: classItem.startTime,
-              duration: 0,
-              isAttendanceMarked: true
+            // Student didn't join at all - mark as absent
+            try {
+              await Attendance.create({
+                classId: classItem._id,
+                studentId: student._id,
+                status: 'absent',
+                joinTime: classItem.startTime,
+                duration: 0,
+                isAttendanceMarked: true
+              });
+            } catch (error) {
+              // Handle duplicate key error - record might already exist
+              console.log(`Attendance record already exists for student ${student._id} in class ${classItem._id}`);
+            }
+          } else {
+            // Student joined - calculate final status based on duration
+            const classDuration = classItem.duration;
+            const studentDuration = studentAttendance.duration || 0;
+            
+            // Calculate actual duration if student didn't leave
+            let actualDuration = studentDuration;
+            if (!studentAttendance.leaveTime) {
+              // Student didn't leave - calculate duration from join to class end
+              const classEndTime = new Date(classItem.startTime.getTime() + (classItem.duration * 60000));
+              actualDuration = Math.floor((classEndTime - studentAttendance.joinTime) / (1000 * 60));
+            }
+            
+            let finalStatus = 'absent';
+            
+            if (actualDuration >= classDuration * 0.8) {
+              // Attended 80% or more of the class
+              finalStatus = 'present';
+            } else if (actualDuration >= 5) {
+              // Attended at least 5 minutes but less than 80%
+              finalStatus = 'partial';
+            } else {
+              // Attended less than 5 minutes
+              finalStatus = 'absent';
+            }
+
+            // Update the attendance record with final status
+            await Attendance.findByIdAndUpdate(studentAttendance._id, {
+              status: finalStatus,
+              duration: actualDuration,
+              isAttendanceMarked: true,
+              leaveTime: studentAttendance.leaveTime || new Date()
             });
           }
         }));

@@ -25,7 +25,8 @@ router.post('/join', async (req, res) => {
       {
         $setOnInsert: {
           joinTime: new Date(),
-          status: 'partial'
+          status: 'partial',
+          duration: 0
         }
       },
       { upsert: true, new: true }
@@ -55,8 +56,28 @@ router.post('/leave', async (req, res) => {
     // Calculate duration in minutes
     const duration = Math.floor((leaveTime - attendance.joinTime) / (1000 * 60));
 
-    // Update attendance status based on duration
-    const status = duration >= 5 ? 'present' : 'partial';
+    // Get class details to calculate percentage
+    const classSession = await ClassSchedule.findById(classId);
+    const classDuration = classSession ? classSession.duration : 60; // Default 60 minutes
+    
+    // Calculate attendance percentage
+    const attendancePercentage = (duration / classDuration) * 100;
+    
+    // Update attendance status based on duration and percentage
+    let status = 'absent';
+    
+    if (duration >= 5) {
+      if (attendancePercentage >= 80) {
+        // Attended 80% or more of the class
+        status = 'present';
+      } else {
+        // Attended at least 5 minutes but less than 80%
+        status = 'partial';
+      }
+    } else {
+      // Attended less than 5 minutes
+      status = 'absent';
+    }
 
     // Update attendance record
     const updatedAttendance = await Attendance.findOneAndUpdate(
