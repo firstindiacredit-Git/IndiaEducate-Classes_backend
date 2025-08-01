@@ -5,6 +5,9 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const http = require('http');
+
+const path = require("path");
 
 // Load env variables
 dotenv.config();
@@ -74,13 +77,21 @@ const attendanceRoutes = require('./controllers/attendanceController');
 const notificationRoutes = require('./controllers/notificationController');
 const adminNotificationRoutes = require('./controllers/adminNotificationController');
 
-// Routes
+// API Routes
 app.use('/api/admin', adminRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/classes', classScheduleRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin/notifications', adminNotificationRoutes);
+
+
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Catch-all route for SPA - must be after API routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 // Start server
 const PORT = process.env.PORT || 5000;
