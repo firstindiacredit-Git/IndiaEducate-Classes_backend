@@ -25,7 +25,7 @@ const attendanceSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['present', 'absent', 'partial'],
-    default: 'partial'
+    default: 'partial' // Default to partial, will be updated based on actual attendance
   },
   isAttendanceMarked: {
     type: Boolean,

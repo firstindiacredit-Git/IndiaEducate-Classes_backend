@@ -230,16 +230,53 @@ const updateClassStatuses = async () => {
 
         // Create absent records for all students in this program
         const students = await Student.find({ program: classItem.program });
-        await Promise.all(students.map(student => 
-          Attendance.create({
-            classId: classItem._id,
-            studentId: student._id,
-            status: 'absent',
-            joinTime: classItem.startTime,
-            duration: 0,
-            isAttendanceMarked: true
-          })
-        ));
+        const existingAttendance = await Attendance.find({ classId: classItem._id });
+        
+        await Promise.all(students.map(async (student) => {
+          // Check if student already has an attendance record
+          const existingRecord = existingAttendance.find(a => 
+            a.studentId.toString() === student._id.toString()
+          );
+          
+          if (!existingRecord) {
+            // Only create absent record if student doesn't have any attendance record
+            try {
+              await Attendance.create({
+                classId: classItem._id,
+                studentId: student._id,
+                status: 'absent',
+                joinTime: classItem.startTime,
+                duration: 0,
+                isAttendanceMarked: true
+              });
+            } catch (error) {
+              // Handle duplicate key error - record might already exist
+              console.log(`Attendance record already exists for student ${student._id} in class ${classItem._id}`);
+            }
+          } else {
+            // Student has an attendance record - update it if they didn't leave
+            if (!existingRecord.leaveTime) {
+              // Calculate duration from join to class start time (since class expired)
+              const duration = Math.floor((classItem.startTime - existingRecord.joinTime) / (1000 * 60));
+              
+              let finalStatus = 'absent';
+              if (duration >= 5) {
+                finalStatus = 'partial';
+              }
+              
+              console.log(`Expired class ${classItem._id} - Student ${student._id}:`);
+              console.log(`- Duration: ${duration} minutes`);
+              console.log(`- Final status: ${finalStatus}`);
+              
+              await Attendance.findByIdAndUpdate(existingRecord._id, {
+                status: finalStatus,
+                duration: Math.max(0, duration),
+                isAttendanceMarked: true,
+                leaveTime: classItem.startTime
+              });
+            }
+          }
+        }));
       }
     }
 
@@ -305,7 +342,7 @@ const updateClassStatuses = async () => {
           } else {
             // Student joined - calculate final status based on duration
             const classDuration = classItem.duration;
-            const studentDuration = studentAttendance.duration || 0;
+            let studentDuration = studentAttendance.duration || 0;
             
             // Calculate actual duration if student didn't leave
             let actualDuration = studentDuration;
@@ -327,6 +364,13 @@ const updateClassStatuses = async () => {
               // Attended less than 5 minutes
               finalStatus = 'absent';
             }
+
+            console.log(`Auto-ending class ${classItem._id} - Student ${student._id}:`);
+            console.log(`- Student duration: ${studentDuration} minutes`);
+            console.log(`- Actual duration: ${actualDuration} minutes`);
+            console.log(`- Class duration: ${classDuration} minutes`);
+            console.log(`- Attendance percentage: ${((actualDuration / classDuration) * 100).toFixed(2)}%`);
+            console.log(`- Final status: ${finalStatus}`);
 
             // Update the attendance record with final status
             await Attendance.findByIdAndUpdate(studentAttendance._id, {
@@ -531,25 +575,71 @@ router.post('/end/:id', async (req, res) => {
     const allStudents = await Student.find({ program: classSchedule.program });
     const attendance = await Attendance.find({ classId: id });
 
-    // Create absent records for students who didn't attend
-    const absentPromises = allStudents.map(async (student) => {
+    // Process attendance for all students
+    const attendancePromises = allStudents.map(async (student) => {
       const studentAttendance = attendance.find(a => 
         a.studentId.toString() === student._id.toString()
       );
 
       if (!studentAttendance) {
-        await Attendance.create({
-          classId: id,
-          studentId: student._id,
-          status: 'absent',
-          joinTime: classSchedule.startTime,
-          duration: 0,
-          isAttendanceMarked: true
+        // Student didn't join at all - mark as absent
+        try {
+          await Attendance.create({
+            classId: id,
+            studentId: student._id,
+            status: 'absent',
+            joinTime: classSchedule.startTime,
+            duration: 0,
+            isAttendanceMarked: true
+          });
+        } catch (error) {
+          // Handle duplicate key error - record might already exist
+          console.log(`Attendance record already exists for student ${student._id} in class ${id}`);
+        }
+      } else {
+        // Student joined - calculate final status based on duration
+        const classDuration = classSchedule.duration;
+        let studentDuration = studentAttendance.duration || 0;
+        
+        // Calculate actual duration if student didn't leave
+        let actualDuration = studentDuration;
+        if (!studentAttendance.leaveTime) {
+          // Student didn't leave - calculate duration from join to class end
+          const classEndTime = new Date(classSchedule.startTime.getTime() + (classSchedule.duration * 60000));
+          actualDuration = Math.floor((classEndTime - studentAttendance.joinTime) / (1000 * 60));
+        }
+        
+        let finalStatus = 'absent';
+        
+        if (actualDuration >= classDuration * 0.8) {
+          // Attended 80% or more of the class
+          finalStatus = 'present';
+        } else if (actualDuration >= 5) {
+          // Attended at least 5 minutes but less than 80%
+          finalStatus = 'partial';
+        } else {
+          // Attended less than 5 minutes
+          finalStatus = 'absent';
+        }
+
+        console.log(`Manual ending class ${id} - Student ${student._id}:`);
+        console.log(`- Student duration: ${studentDuration} minutes`);
+        console.log(`- Actual duration: ${actualDuration} minutes`);
+        console.log(`- Class duration: ${classDuration} minutes`);
+        console.log(`- Attendance percentage: ${((actualDuration / classDuration) * 100).toFixed(2)}%`);
+        console.log(`- Final status: ${finalStatus}`);
+
+        // Update the attendance record with final status
+        await Attendance.findByIdAndUpdate(studentAttendance._id, {
+          status: finalStatus,
+          duration: actualDuration,
+          isAttendanceMarked: true,
+          leaveTime: studentAttendance.leaveTime || new Date()
         });
       }
     });
 
-    await Promise.all(absentPromises);
+    await Promise.all(attendancePromises);
 
     res.json({
       message: 'Class ended successfully',

@@ -25,8 +25,9 @@ router.post('/join', async (req, res) => {
       {
         $setOnInsert: {
           joinTime: new Date(),
-          status: 'partial',
-          duration: 0
+          status: 'partial', // Start with partial, will be updated when they leave
+          duration: 0,
+          isAttendanceMarked: false
         }
       },
       { upsert: true, new: true }
@@ -79,6 +80,12 @@ router.post('/leave', async (req, res) => {
       status = 'absent';
     }
 
+    console.log(`Student ${studentId} leaving class ${classId}:`);
+    console.log(`- Duration: ${duration} minutes`);
+    console.log(`- Class duration: ${classDuration} minutes`);
+    console.log(`- Attendance percentage: ${attendancePercentage.toFixed(2)}%`);
+    console.log(`- Final status: ${status}`);
+
     // Update attendance record
     const updatedAttendance = await Attendance.findOneAndUpdate(
       { classId, studentId },
@@ -86,7 +93,7 @@ router.post('/leave', async (req, res) => {
         leaveTime,
         duration,
         status,
-        isAttendanceMarked: status === 'present'
+        isAttendanceMarked: true
       },
       { new: true }
     );
