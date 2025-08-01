@@ -26,6 +26,7 @@
     "multer": "^2.0.2",
     "multer-s3": "^3.0.1",
     "nodemailer": "^7.0.5",
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "socket.io": "^4.8.1"
   }
 }

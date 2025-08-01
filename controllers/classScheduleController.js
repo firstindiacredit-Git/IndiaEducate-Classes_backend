@@ -2,13 +2,181 @@ const express = require('express');
 const ClassSchedule = require('../model/classScheduleModel');
 const Student = require('../model/studentModel');
 const Attendance = require('../model/attendanceModel');
+const Notification = require('../model/notificationModel');
+const AdminNotification = require('../model/adminNotificationModel');
+const { sendClassScheduledEmail, sendClassUpdatedEmail, sendClassCancelledEmail, sendClassStartedEmail } = require('../utils/emailService');
 const router = express.Router();
+
+// Function to send emails to all students in a program
+const sendEmailsToProgramStudents = async (program, emailFunction, classDetails) => {
+  try {
+    const students = await Student.find({ program });
+    
+    const emailPromises = students.map(async (student) => {
+      try {
+        await emailFunction(student.email, student.fullName || 'Student', classDetails);
+        console.log(`Email sent to ${student.email} for class: ${classDetails.title}`);
+      } catch (error) {
+        console.error(`Failed to send email to ${student.email}:`, error);
+      }
+    });
+
+    await Promise.all(emailPromises);
+    console.log(`Emails sent to ${students.length} students in program: ${program}`);
+  } catch (error) {
+    console.error('Error sending emails to students:', error);
+  }
+};
+
+// Function to create notifications for all students in a program
+const createNotificationsForProgram = async (program, notificationType, classDetails) => {
+  try {
+    const students = await Student.find({ program });
+    
+    const notificationPromises = students.map(async (student) => {
+      try {
+        let title, message;
+        
+        switch (notificationType) {
+          case 'class_scheduled':
+            title = 'New Class Scheduled';
+            message = `${classDetails.title} has been scheduled for ${new Date(classDetails.startTime).toLocaleDateString()} at ${new Date(classDetails.startTime).toLocaleTimeString()}`;
+            break;
+          case 'class_updated':
+            title = 'Class Updated';
+            message = `${classDetails.title} has been updated. New time: ${new Date(classDetails.startTime).toLocaleDateString()} at ${new Date(classDetails.startTime).toLocaleTimeString()}`;
+            break;
+          case 'class_cancelled':
+            title = 'Class Cancelled';
+            message = `${classDetails.title} scheduled for ${new Date(classDetails.startTime).toLocaleDateString()} has been cancelled`;
+            break;
+          case 'class_started':
+            title = '🎥 LIVE CLASS STARTED';
+            message = `${classDetails.title} has started! Click to join: ${classDetails.meetingLink}`;
+            break;
+          default:
+            title = 'Class Notification';
+            message = `Update regarding ${classDetails.title}`;
+        }
+
+        const notification = await Notification.create({
+          studentEmail: student.email,
+          type: notificationType,
+          title,
+          message,
+          relatedClassId: classDetails._id,
+          metadata: {
+            classTitle: classDetails.title,
+            program: classDetails.program,
+            startTime: classDetails.startTime,
+            duration: classDetails.duration
+          }
+        });
+        
+        // Emit real-time notification via Socket.io
+        if (global.io) {
+          global.io.to(`notifications-${student.email}`).emit('new-notification', {
+            notification,
+            unreadCount: 1
+          });
+          console.log(`Real-time notification emitted to ${student.email} for class: ${classDetails.title}`);
+        }
+        
+        console.log(`Notification created for ${student.email} for class: ${classDetails.title}`);
+      } catch (error) {
+        console.error(`Failed to create notification for ${student.email}:`, error);
+      }
+    });
+
+    await Promise.all(notificationPromises);
+    console.log(`Notifications created for ${students.length} students in program: ${program}`);
+  } catch (error) {
+    console.error('Error creating notifications for students:', error);
+  }
+};
+
+// Function to create admin notifications
+const createAdminNotification = async (notificationType, classDetails) => {
+  try {
+    let title, message;
+    
+    switch (notificationType) {
+      case 'upcoming_class_warning':
+        title = '⚠️ Class Starting Soon';
+        message = `Your class "${classDetails.title}" starts in 5 minutes. Please start it now, otherwise it will expire/get cancelled after 10 minutes.`;
+        break;
+      case 'class_expired':
+        title = '❌ Class Expired';
+        message = `Class "${classDetails.title}" has expired because it wasn't started on time.`;
+        break;
+      case 'class_started':
+        title = '✅ Class Started';
+        message = `Class "${classDetails.title}" has been started successfully.`;
+        break;
+      default:
+        title = 'Class Notification';
+        message = `Update regarding ${classDetails.title}`;
+    }
+
+    const notification = await AdminNotification.create({
+      title,
+      message,
+      type: notificationType,
+      relatedClassId: classDetails._id,
+      metadata: {
+        classTitle: classDetails.title,
+        program: classDetails.program,
+        startTime: classDetails.startTime,
+        duration: classDetails.duration
+      },
+      isRead: false
+    });
+
+    // Emit real-time notification via Socket.io
+    if (global.io) {
+      global.io.emit('admin-new-notification', {
+        notification,
+        unreadCount: 1
+      });
+      console.log(`Admin notification emitted for class: ${classDetails.title}`);
+    }
+
+    console.log(`Admin notification created for class: ${classDetails.title}`);
+  } catch (error) {
+    console.error('Error creating admin notification:', error);
+  }
+};
 
 // Function to check and update class statuses
 const updateClassStatuses = async () => {
   try {
     const now = new Date();
     // console.log('Running status update check at:', now);
+    
+    // Check for upcoming classes (5 minutes before start time)
+    const upcomingClasses = await ClassSchedule.find({
+      status: 'scheduled',
+      startTime: { 
+        $gt: now,
+        $lte: new Date(now.getTime() + 5 * 60000) // Within next 5 minutes
+      }
+    });
+
+    // Create admin notifications for upcoming classes
+    for (const classItem of upcomingClasses) {
+      const startTime = new Date(classItem.startTime);
+      const minutesUntilStart = Math.floor((startTime - now) / (1000 * 60));
+      
+      // Check if we haven't already sent a notification for this class
+      const existingNotification = await AdminNotification.findOne({
+        relatedClassId: classItem._id,
+        type: 'upcoming_class_warning'
+      });
+
+      if (!existingNotification && minutesUntilStart <= 5) {
+        await createAdminNotification('upcoming_class_warning', classItem);
+      }
+    }
     
     // Find all scheduled classes that have passed their start time
     const scheduledClasses = await ClassSchedule.find({
@@ -30,6 +198,35 @@ const updateClassStatuses = async () => {
           status: 'expired',
           updatedAt: now
         });
+
+        // Emit Socket.io event for class status change
+        if (global.io) {
+          global.io.emit('class-status-changed', {
+            classId: classItem._id,
+            status: 'expired',
+            program: classItem.program,
+            title: classItem.title
+          });
+          
+          // Emit specific event for expired classes
+          global.io.emit('new-expired-class', {
+            classId: classItem._id,
+            status: 'expired',
+            program: classItem.program,
+            title: classItem.title,
+            startTime: classItem.startTime,
+            duration: classItem.duration
+          });
+        }
+
+        // Send cancellation emails to all students in the program
+        await sendEmailsToProgramStudents(classItem.program, sendClassCancelledEmail, classItem);
+
+        // Create notifications for all students in the program
+        await createNotificationsForProgram(classItem.program, 'class_cancelled', classItem);
+
+        // Create admin notification for expired class
+        await createAdminNotification('class_expired', classItem);
 
         // Create absent records for all students in this program
         const students = await Student.find({ program: classItem.program });
@@ -67,6 +264,16 @@ const updateClassStatuses = async () => {
           completedAt: now,
           updatedAt: now
         });
+
+        // Emit Socket.io event for class status change
+        if (global.io) {
+          global.io.emit('class-status-changed', {
+            classId: classItem._id,
+            status: 'completed',
+            program: classItem.program,
+            title: classItem.title
+          });
+        }
 
         // Send notification to all participants (if needed)
         console.log(`Meeting for class ${classItem.title} has been automatically ended due to time completion.`);
@@ -166,6 +373,23 @@ router.post('/create', async (req, res) => {
       status: 'scheduled'
     });
 
+    // Send email notifications to all students in the program
+    await sendEmailsToProgramStudents(program, sendClassScheduledEmail, classSchedule);
+
+    // Create notifications for all students in the program
+    await createNotificationsForProgram(program, 'class_scheduled', classSchedule);
+
+    // Emit Socket.io event for new class scheduled
+    if (global.io) {
+      global.io.emit('new-class-scheduled', {
+        classId: classSchedule._id,
+        title: classSchedule.title,
+        program: classSchedule.program,
+        startTime: classSchedule.startTime,
+        duration: classSchedule.duration
+      });
+    }
+
     res.status(201).json({
       message: 'Class scheduled successfully',
       schedule: classSchedule
@@ -249,6 +473,28 @@ router.post('/start/:id', async (req, res) => {
       return res.status(404).json({ message: 'Class schedule not found' });
     }
 
+    // Send email notifications to all students in the program about class starting
+    await sendEmailsToProgramStudents(classSchedule.program, sendClassStartedEmail, classSchedule);
+
+    // Create notifications for all students in the program
+    await createNotificationsForProgram(classSchedule.program, 'class_started', classSchedule);
+
+    // Create admin notification for class started
+    await createAdminNotification('class_started', classSchedule);
+
+    // Emit Socket.io event for class started
+    if (global.io) {
+      global.io.emit('class-status-changed', {
+        classId: classSchedule._id,
+        status: 'ongoing',
+        program: classSchedule.program,
+        title: classSchedule.title,
+        updates: {
+          meetingId,
+          meetingLink
+        }
+      });
+    }
 
     res.json({
       message: 'Class started successfully',
@@ -353,6 +599,23 @@ router.put('/update/:id', async (req, res) => {
       },
       { new: true }
     );
+
+    // Send email notifications to all students in the program about the update
+    await sendEmailsToProgramStudents(program, sendClassUpdatedEmail, updatedClass);
+
+    // Create notifications for all students in the program
+    await createNotificationsForProgram(program, 'class_updated', updatedClass);
+
+    // Emit Socket.io event for class updated
+    if (global.io) {
+      global.io.emit('class-updated', {
+        classId: updatedClass._id,
+        title: updatedClass.title,
+        program: updatedClass.program,
+        startTime: updatedClass.startTime,
+        duration: updatedClass.duration
+      });
+    }
 
     res.json({
       message: 'Class updated successfully',
@@ -502,8 +765,7 @@ router.post('/check-expired', async (req, res) => {
       startTime: { $lt: new Date(now - EXPIRY_MINUTES * 60000) }
     });
 
-
-    // Update their status
+    // Update their status and send cancellation emails
     const updatePromises = scheduledClasses.map(async (classItem) => {
       const minutesPassed = Math.floor((now - classItem.startTime) / (1000 * 60));
 
@@ -512,6 +774,34 @@ router.post('/check-expired', async (req, res) => {
         meetingId: null,
         meetingLink: null
       });
+
+      // Send cancellation emails to all students in the program
+      await sendEmailsToProgramStudents(classItem.program, sendClassCancelledEmail, classItem);
+
+      // Create notifications for all students in the program
+      await createNotificationsForProgram(classItem.program, 'class_cancelled', classItem);
+
+      // Create admin notification for expired class
+      await createAdminNotification('class_expired', classItem);
+
+      // Emit Socket.io events for expired classes
+      if (global.io) {
+        global.io.emit('class-status-changed', {
+          classId: classItem._id,
+          status: 'expired',
+          program: classItem.program,
+          title: classItem.title
+        });
+        
+        global.io.emit('new-expired-class', {
+          classId: classItem._id,
+          status: 'expired',
+          program: classItem.program,
+          title: classItem.title,
+          startTime: classItem.startTime,
+          duration: classItem.duration
+        });
+      }
 
       return classItem._id;
     });
@@ -528,4 +818,36 @@ router.post('/check-expired', async (req, res) => {
   }
 });
 
-module.exports = router; 
+module.exports = router;
+
+// Test endpoint for email functionality
+router.post('/test-email', async (req, res) => {
+  try {
+    const { email, studentName, program } = req.body;
+    
+    if (!email || !studentName || !program) {
+      return res.status(400).json({ 
+        message: 'Email, studentName, and program are required' 
+      });
+    }
+
+    const testClassDetails = {
+      title: 'Test Class',
+      description: 'This is a test class for email functionality',
+      program: program,
+      startTime: new Date(),
+      duration: 60
+    };
+
+    // Test the email function
+    await sendClassScheduledEmail(email, studentName, testClassDetails);
+
+    res.json({
+      message: 'Test email sent successfully',
+      sentTo: email
+    });
+  } catch (err) {
+    console.error('Error sending test email:', err);
+    res.status(500).json({ message: err.message });
+  }
+}); 

@@ -1,14 +1,36 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// Create transporter with error handling
+let transporter;
+try {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+} catch (error) {
+  console.error('Failed to create email transporter:', error);
+}
+
+// Verify transporter configuration
+const verifyTransporter = async () => {
+  if (!transporter) {
+    throw new Error('Email transporter not configured. Check EMAIL_USER and EMAIL_PASS environment variables.');
+  }
+  
+  try {
+    await transporter.verify();
+    console.log('Email transporter verified successfully');
+  } catch (error) {
+    console.error('Email transporter verification failed:', error);
+    throw new Error('Email configuration is invalid. Please check your email credentials.');
+  }
+};
 
 async function sendOTPEmail(to, otp) {
+  await verifyTransporter();
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to,
@@ -18,6 +40,7 @@ async function sendOTPEmail(to, otp) {
 }
 
 async function sendCredentialsEmail(to, email, password) {
+  await verifyTransporter();
   const emailContent = `
 Dear Student,
 
@@ -44,6 +67,7 @@ India Educates Team
 }
 
 async function sendProfileUpdateEmail(to, studentDetails, newPassword = null) {
+  await verifyTransporter();
   const emailContent = `
 Dear Student,
 
@@ -74,4 +98,153 @@ India Educates Team
   });
 }
 
-module.exports = { sendOTPEmail, sendCredentialsEmail, sendProfileUpdateEmail };
+async function sendClassScheduledEmail(to, studentName, classDetails) {
+  await verifyTransporter();
+  const startTime = new Date(classDetails.startTime);
+  const endTime = new Date(startTime.getTime() + (classDetails.duration * 60000));
+  
+  const emailContent = `
+Dear ${studentName},
+
+A new class has been scheduled for your program. Here are the details:
+
+Class Title: ${classDetails.title}
+Description: ${classDetails.description || 'No description provided'}
+Program: ${classDetails.program}
+Date: ${startTime.toLocaleDateString()}
+Start Time: ${startTime.toLocaleTimeString()}
+End Time: ${endTime.toLocaleTimeString()}
+Duration: ${classDetails.duration} minutes
+
+Please make sure to join the class on time. You will receive a meeting link when the class starts.
+
+If you have any questions, please contact your instructor.
+
+Best regards,
+India Educates Team
+  `;
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `New Class Scheduled: ${classDetails.title} - India Educates`,
+    text: emailContent,
+  });
+}
+
+async function sendClassUpdatedEmail(to, studentName, classDetails) {
+  await verifyTransporter();
+  const startTime = new Date(classDetails.startTime);
+  const endTime = new Date(startTime.getTime() + (classDetails.duration * 60000));
+  
+  const emailContent = `
+Dear ${studentName},
+
+A class in your program has been updated. Here are the updated details:
+
+Class Title: ${classDetails.title}
+Description: ${classDetails.description || 'No description provided'}
+Program: ${classDetails.program}
+Date: ${startTime.toLocaleDateString()}
+Start Time: ${startTime.toLocaleTimeString()}
+End Time: ${endTime.toLocaleTimeString()}
+Duration: ${classDetails.duration} minutes
+
+Please note these changes and adjust your schedule accordingly.
+
+If you have any questions, please contact your instructor.
+
+Best regards,
+India Educates Team
+  `;
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `Class Updated: ${classDetails.title} - India Educates`,
+    text: emailContent,
+  });
+}
+
+async function sendClassCancelledEmail(to, studentName, classDetails) {
+  await verifyTransporter();
+  const startTime = new Date(classDetails.startTime);
+  
+  const emailContent = `
+Dear ${studentName},
+
+A class in your program has been cancelled. Here are the details of the cancelled class:
+
+Class Title: ${classDetails.title}
+Description: ${classDetails.description || 'No description provided'}
+Program: ${classDetails.program}
+Scheduled Date: ${startTime.toLocaleDateString()}
+Scheduled Time: ${startTime.toLocaleTimeString()}
+
+The class has been cancelled and will not take place. You will be notified when a new class is scheduled to replace this one.
+
+If you have any questions, please contact your instructor.
+
+Best regards,
+India Educates Team
+  `;
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `Class Cancelled: ${classDetails.title} - India Educates`,
+    text: emailContent,
+  });
+}
+
+async function sendClassStartedEmail(to, studentName, classDetails) {
+  await verifyTransporter();
+  const startTime = new Date(classDetails.startTime);
+  const endTime = new Date(startTime.getTime() + (classDetails.duration * 60000));
+  
+  const emailContent = `
+Dear ${studentName},
+
+Your class has started! Here are the details:
+
+Class Title: ${classDetails.title}
+Description: ${classDetails.description || 'No description provided'}
+Program: ${classDetails.program}
+Start Time: ${startTime.toLocaleTimeString()}
+End Time: ${endTime.toLocaleTimeString()}
+Duration: ${classDetails.duration} minutes
+
+🎥 JOIN CLASS NOW:
+${classDetails.meetingLink}
+
+Click the link above to join the live class immediately.
+
+Important Notes:
+- Make sure you have a stable internet connection
+- Join with your full name for attendance tracking
+- The class will end automatically after ${classDetails.duration} minutes
+- If you face any technical issues, contact your instructor immediately
+
+We hope you have a great learning session!
+
+Best regards,
+India Educates Team
+  `;
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `🎥 LIVE CLASS STARTED: ${classDetails.title} - India Educates`,
+    text: emailContent,
+  });
+}
+
+module.exports = { 
+  sendOTPEmail, 
+  sendCredentialsEmail, 
+  sendProfileUpdateEmail,
+  sendClassScheduledEmail,
+  sendClassUpdatedEmail,
+  sendClassCancelledEmail,
+  sendClassStartedEmail
+};
