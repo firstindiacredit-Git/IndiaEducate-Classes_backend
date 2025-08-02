@@ -228,6 +228,16 @@ router.delete('/students/:id', async (req, res) => {
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
+    
+    // Emit force logout event to the deleted student
+    if (global.io && student.email) {
+      // console.log(`Emitting force-logout event for deleted student: ${student.email}`);
+      global.io.to(`force-logout-${student.email}`).emit('force-logout', {
+        message: 'Your account has been deleted by an administrator',
+        reason: 'account_deleted'
+      });
+    }
+    
     res.json({ message: 'Student deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -355,6 +365,15 @@ router.put('/update-student/:id', async (req, res) => {
       global.io.to(`profile-${email}`).emit('profile-updated', {
         profile: updatedStudent
       });
+      
+      // If email was changed, force logout the student from old email
+      if (student.email !== email) {
+        // console.log(`Emitting force-logout event for email change: ${student.email} -> ${email}`);
+        global.io.to(`force-logout-${student.email}`).emit('force-logout', {
+          message: 'Your account email has been updated by an administrator. Please login again.',
+          reason: 'email_changed'
+        });
+      }
     }
 
     res.json({ 

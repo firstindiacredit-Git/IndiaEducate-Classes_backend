@@ -60,6 +60,22 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle student joining force-logout room
+  socket.on('join-force-logout', (studentEmail) => {
+    if (studentEmail) {
+      socket.join(`force-logout-${studentEmail}`);
+      // console.log(`Student ${studentEmail} joined force-logout room`);
+    }
+  });
+
+  // Handle student leaving force-logout room
+  socket.on('leave-force-logout', (studentEmail) => {
+    if (studentEmail) {
+      socket.leave(`force-logout-${studentEmail}`);
+      // console.log(`Student ${studentEmail} left force-logout room`);
+    }
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     // console.log('User disconnected:', socket.id);
