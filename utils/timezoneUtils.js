@@ -218,7 +218,7 @@ const getTimezoneFromCountry = (countryName) => {
   }
   
   // Default to UTC if no match found
-  console.log(`No timezone found for country: ${countryName}, using UTC`);
+  // console.log(`No timezone found for country: ${countryName}, using UTC`);
   return 'UTC';
 };
 

@@ -23,7 +23,7 @@ const verifyTransporter = async () => {
   
   try {
     await transporter.verify();
-    console.log('Email transporter verified successfully');
+    // console.log('Email transporter verified successfully');
   } catch (error) {
     console.error('Email transporter verification failed:', error);
     throw new Error('Email configuration is invalid. Please check your email credentials.');

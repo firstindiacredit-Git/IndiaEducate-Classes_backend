@@ -26,19 +26,19 @@ const io = new Server(server, {
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  // console.log('User connected:', socket.id);
 
   // Handle student joining their notification room
   socket.on('join-notifications', (studentEmail) => {
     if (studentEmail) {
       socket.join(`notifications-${studentEmail}`);
-      console.log(`Student ${studentEmail} joined notifications room`);
+      // console.log(`Student ${studentEmail} joined notifications room`);
     }
   });
 
   // Handle disconnection
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    // console.log('User disconnected:', socket.id);
   });
 });
 

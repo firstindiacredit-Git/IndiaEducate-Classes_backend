@@ -11,7 +11,7 @@ const emitNotificationToStudent = (studentEmail, notification) => {
       notification,
       unreadCount: 1 // Increment by 1 for new notification
     });
-    console.log(`Emitted notification to student: ${studentEmail}`);
+    // console.log(`Emitted notification to student: ${studentEmail}`);
   }
 };
 

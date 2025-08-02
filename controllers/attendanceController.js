@@ -157,11 +157,11 @@ router.post('/leave', async (req, res) => {
       status = 'absent';
     }
 
-    console.log(`Student ${studentId} leaving class ${classId}:`);
-    console.log(`- Duration: ${duration} minutes`);
-    console.log(`- Class duration: ${classDuration} minutes`);
-    console.log(`- Attendance percentage: ${attendancePercentage.toFixed(2)}%`);
-    console.log(`- Final status: ${status}`);
+    // console.log(`Student ${studentId} leaving class ${classId}:`);
+    // console.log(`- Duration: ${duration} minutes`);
+    // console.log(`- Class duration: ${classDuration} minutes`);
+    // console.log(`- Attendance percentage: ${attendancePercentage.toFixed(2)}%`);
+    // console.log(`- Final status: ${status}`);
 
     // Update attendance record
     const updatedAttendance = await Attendance.findOneAndUpdate(

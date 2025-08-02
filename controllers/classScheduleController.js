@@ -16,14 +16,14 @@ const sendEmailsToProgramStudents = async (program, emailFunction, classDetails)
     const emailPromises = students.map(async (student) => {
       try {
         await emailFunction(student.email, student.fullName || 'Student', classDetails, student.country);
-        console.log(`Email sent to ${student.email} for class: ${classDetails.title}`);
+        // console.log(`Email sent to ${student.email} for class: ${classDetails.title}`);
       } catch (error) {
         console.error(`Failed to send email to ${student.email}:`, error);
       }
     });
 
     await Promise.all(emailPromises);
-    console.log(`Emails sent to ${students.length} students in program: ${program}`);
+    // console.log(`Emails sent to ${students.length} students in program: ${program}`);
   } catch (error) {
     console.error('Error sending emails to students:', error);
   }
@@ -88,17 +88,17 @@ const createNotificationsForProgram = async (program, notificationType, classDet
             notification,
             unreadCount: 1
           });
-          console.log(`Real-time notification emitted to ${student.email} for class: ${classDetails.title}`);
+          // console.log(`Real-time notification emitted to ${student.email} for class: ${classDetails.title}`);
         }
         
-        console.log(`Notification created for ${student.email} for class: ${classDetails.title}`);
+        // console.log(`Notification created for ${student.email} for class: ${classDetails.title}`);
       } catch (error) {
         console.error(`Failed to create notification for ${student.email}:`, error);
       }
     });
 
     await Promise.all(notificationPromises);
-    console.log(`Notifications created for ${students.length} students in program: ${program}`);
+    // console.log(`Notifications created for ${students.length} students in program: ${program}`);
   } catch (error) {
     console.error('Error creating notifications for students:', error);
   }
@@ -147,10 +147,10 @@ const createAdminNotification = async (notificationType, classDetails) => {
         notification,
         unreadCount: 1
       });
-      console.log(`Admin notification emitted for class: ${classDetails.title}`);
+      // console.log(`Admin notification emitted for class: ${classDetails.title}`);
     }
 
-    console.log(`Admin notification created for class: ${classDetails.title}`);
+    // console.log(`Admin notification created for class: ${classDetails.title}`);
   } catch (error) {
     console.error('Error creating admin notification:', error);
   }
@@ -260,7 +260,7 @@ const updateClassStatuses = async () => {
               });
             } catch (error) {
               // Handle duplicate key error - record might already exist
-              console.log(`Attendance record already exists for student ${student._id} in class ${classItem._id}`);
+              // console.log(`Attendance record already exists for student ${student._id} in class ${classItem._id}`);
             }
           } else {
             // Student has an attendance record - update it if they didn't leave
@@ -273,9 +273,9 @@ const updateClassStatuses = async () => {
                 finalStatus = 'partial';
               }
               
-              console.log(`Expired class ${classItem._id} - Student ${student._id}:`);
-              console.log(`- Duration: ${duration} minutes`);
-              console.log(`- Final status: ${finalStatus}`);
+              // console.log(`Expired class ${classItem._id} - Student ${student._id}:`);
+              // console.log(`- Duration: ${duration} minutes`);
+              // console.log(`- Final status: ${finalStatus}`);
               
               await Attendance.findByIdAndUpdate(existingRecord._id, {
                 status: finalStatus,
@@ -300,7 +300,7 @@ const updateClassStatuses = async () => {
       const endTime = new Date(startTime.getTime() + (classItem.duration * 60000));
       
       if (now > endTime) {
-        console.log(`Class ${classItem._id} has completed its duration. Auto-ending meeting...`);
+        // console.log(`Class ${classItem._id} has completed its duration. Auto-ending meeting...`);
         
         // Auto-end the Jitsi meeting by updating status
         await ClassSchedule.findByIdAndUpdate(classItem._id, {
@@ -322,7 +322,7 @@ const updateClassStatuses = async () => {
         }
 
         // Send notification to all participants (if needed)
-        console.log(`Meeting for class ${classItem.title} has been automatically ended due to time completion.`);
+        // console.log(`Meeting for class ${classItem.title} has been automatically ended due to time completion.`);
 
         // Update attendance for all students in this program
         const allStudents = await Student.find({ program: classItem.program });
@@ -346,7 +346,7 @@ const updateClassStatuses = async () => {
               });
             } catch (error) {
               // Handle duplicate key error - record might already exist
-              console.log(`Attendance record already exists for student ${student._id} in class ${classItem._id}`);
+              // console.log(`Attendance record already exists for student ${student._id} in class ${classItem._id}`);
             }
           } else {
             // Student joined - calculate final status based on duration
@@ -374,12 +374,12 @@ const updateClassStatuses = async () => {
               finalStatus = 'absent';
             }
 
-            console.log(`Auto-ending class ${classItem._id} - Student ${student._id}:`);
-            console.log(`- Student duration: ${studentDuration} minutes`);
-            console.log(`- Actual duration: ${actualDuration} minutes`);
-            console.log(`- Class duration: ${classDuration} minutes`);
-            console.log(`- Attendance percentage: ${((actualDuration / classDuration) * 100).toFixed(2)}%`);
-            console.log(`- Final status: ${finalStatus}`);
+            // console.log(`Auto-ending class ${classItem._id} - Student ${student._id}:`);
+            // console.log(`- Student duration: ${studentDuration} minutes`);
+            // console.log(`- Actual duration: ${actualDuration} minutes`);
+            // console.log(`- Class duration: ${classDuration} minutes`);
+            // console.log(`- Attendance percentage: ${((actualDuration / classDuration) * 100).toFixed(2)}%`);
+            // console.log(`- Final status: ${finalStatus}`);
 
             // Update the attendance record with final status
             await Attendance.findByIdAndUpdate(studentAttendance._id, {
@@ -603,7 +603,7 @@ router.post('/end/:id', async (req, res) => {
           });
         } catch (error) {
           // Handle duplicate key error - record might already exist
-          console.log(`Attendance record already exists for student ${student._id} in class ${id}`);
+          // console.log(`Attendance record already exists for student ${student._id} in class ${id}`);
         }
       } else {
         // Student joined - calculate final status based on duration
@@ -631,12 +631,12 @@ router.post('/end/:id', async (req, res) => {
           finalStatus = 'absent';
         }
 
-        console.log(`Manual ending class ${id} - Student ${student._id}:`);
-        console.log(`- Student duration: ${studentDuration} minutes`);
-        console.log(`- Actual duration: ${actualDuration} minutes`);
-        console.log(`- Class duration: ${classDuration} minutes`);
-        console.log(`- Attendance percentage: ${((actualDuration / classDuration) * 100).toFixed(2)}%`);
-        console.log(`- Final status: ${finalStatus}`);
+        // console.log(`Manual ending class ${id} - Student ${student._id}:`);
+        // console.log(`- Student duration: ${studentDuration} minutes`);
+        // console.log(`- Actual duration: ${actualDuration} minutes`);
+        // console.log(`- Class duration: ${classDuration} minutes`);
+        // console.log(`- Attendance percentage: ${((actualDuration / classDuration) * 100).toFixed(2)}%`);
+        // console.log(`- Final status: ${finalStatus}`);
 
         // Update the attendance record with final status
         await Attendance.findByIdAndUpdate(studentAttendance._id, {
