@@ -36,6 +36,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle student leaving their notification room
+  socket.on('leave-notifications', (studentEmail) => {
+    if (studentEmail) {
+      socket.leave(`notifications-${studentEmail}`);
+      // console.log(`Student ${studentEmail} left notifications room`);
+    }
+  });
+
+  // Handle student joining their profile room
+  socket.on('join-profile', (studentEmail) => {
+    if (studentEmail) {
+      socket.join(`profile-${studentEmail}`);
+      // console.log(`Student ${studentEmail} joined profile room`);
+    }
+  });
+
+  // Handle student leaving their profile room
+  socket.on('leave-profile', (studentEmail) => {
+    if (studentEmail) {
+      socket.leave(`profile-${studentEmail}`);
+      // console.log(`Student ${studentEmail} left profile room`);
+    }
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     // console.log('User disconnected:', socket.id);

@@ -350,6 +350,13 @@ router.put('/update-student/:id', async (req, res) => {
     const updatedStudent = await Student.findById(student._id)
       .select('-password -otp -otpExpires');
 
+    // Emit real-time profile update to the student
+    if (global.io) {
+      global.io.to(`profile-${email}`).emit('profile-updated', {
+        profile: updatedStudent
+      });
+    }
+
     res.json({ 
       message: 'Student updated successfully and notification email sent',
       student: updatedStudent 
