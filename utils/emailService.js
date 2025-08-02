@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { formatTimeForStudent } = require('./timezoneUtils');
 
 // Create transporter with error handling
 let transporter;
@@ -98,10 +99,13 @@ India Educates Team
   });
 }
 
-async function sendClassScheduledEmail(to, studentName, classDetails) {
+async function sendClassScheduledEmail(to, studentName, classDetails, studentCountry = null) {
   await verifyTransporter();
-  const startTime = new Date(classDetails.startTime);
-  const endTime = new Date(startTime.getTime() + (classDetails.duration * 60000));
+  
+  // Get student's timezone formatted times
+  const startTimeFormatted = formatTimeForStudent(classDetails.startTime, studentCountry);
+  const endTime = new Date(classDetails.startTime.getTime() + (classDetails.duration * 60000));
+  const endTimeFormatted = formatTimeForStudent(endTime, studentCountry);
   
   const emailContent = `
 Dear ${studentName},
@@ -111,9 +115,9 @@ A new class has been scheduled for your program. Here are the details:
 Class Title: ${classDetails.title}
 Description: ${classDetails.description || 'No description provided'}
 Program: ${classDetails.program}
-Date: ${startTime.toLocaleDateString()}
-Start Time: ${startTime.toLocaleTimeString()}
-End Time: ${endTime.toLocaleTimeString()}
+Date: ${startTimeFormatted.date}
+Start Time: ${startTimeFormatted.time} (${startTimeFormatted.timezone})
+End Time: ${endTimeFormatted.time} (${endTimeFormatted.timezone})
 Duration: ${classDetails.duration} minutes
 
 Please make sure to join the class on time. You will receive a meeting link when the class starts.
@@ -132,10 +136,13 @@ India Educates Team
   });
 }
 
-async function sendClassUpdatedEmail(to, studentName, classDetails) {
+async function sendClassUpdatedEmail(to, studentName, classDetails, studentCountry = null) {
   await verifyTransporter();
-  const startTime = new Date(classDetails.startTime);
-  const endTime = new Date(startTime.getTime() + (classDetails.duration * 60000));
+  
+  // Get student's timezone formatted times
+  const startTimeFormatted = formatTimeForStudent(classDetails.startTime, studentCountry);
+  const endTime = new Date(classDetails.startTime.getTime() + (classDetails.duration * 60000));
+  const endTimeFormatted = formatTimeForStudent(endTime, studentCountry);
   
   const emailContent = `
 Dear ${studentName},
@@ -145,9 +152,9 @@ A class in your program has been updated. Here are the updated details:
 Class Title: ${classDetails.title}
 Description: ${classDetails.description || 'No description provided'}
 Program: ${classDetails.program}
-Date: ${startTime.toLocaleDateString()}
-Start Time: ${startTime.toLocaleTimeString()}
-End Time: ${endTime.toLocaleTimeString()}
+Date: ${startTimeFormatted.date}
+Start Time: ${startTimeFormatted.time} (${startTimeFormatted.timezone})
+End Time: ${endTimeFormatted.time} (${endTimeFormatted.timezone})
 Duration: ${classDetails.duration} minutes
 
 Please note these changes and adjust your schedule accordingly.
@@ -166,9 +173,11 @@ India Educates Team
   });
 }
 
-async function sendClassCancelledEmail(to, studentName, classDetails) {
+async function sendClassCancelledEmail(to, studentName, classDetails, studentCountry = null) {
   await verifyTransporter();
-  const startTime = new Date(classDetails.startTime);
+  
+  // Get student's timezone formatted times
+  const startTimeFormatted = formatTimeForStudent(classDetails.startTime, studentCountry);
   
   const emailContent = `
 Dear ${studentName},
@@ -178,8 +187,8 @@ A class in your program has been cancelled. Here are the details of the cancelle
 Class Title: ${classDetails.title}
 Description: ${classDetails.description || 'No description provided'}
 Program: ${classDetails.program}
-Scheduled Date: ${startTime.toLocaleDateString()}
-Scheduled Time: ${startTime.toLocaleTimeString()}
+Scheduled Date: ${startTimeFormatted.date}
+Scheduled Time: ${startTimeFormatted.time} (${startTimeFormatted.timezone})
 
 The class has been cancelled and will not take place. You will be notified when a new class is scheduled to replace this one.
 
@@ -197,10 +206,13 @@ India Educates Team
   });
 }
 
-async function sendClassStartedEmail(to, studentName, classDetails) {
+async function sendClassStartedEmail(to, studentName, classDetails, studentCountry = null) {
   await verifyTransporter();
-  const startTime = new Date(classDetails.startTime);
-  const endTime = new Date(startTime.getTime() + (classDetails.duration * 60000));
+  
+  // Get student's timezone formatted times
+  const startTimeFormatted = formatTimeForStudent(classDetails.startTime, studentCountry);
+  const endTime = new Date(classDetails.startTime.getTime() + (classDetails.duration * 60000));
+  const endTimeFormatted = formatTimeForStudent(endTime, studentCountry);
   
   const emailContent = `
 Dear ${studentName},
@@ -210,8 +222,8 @@ Your class has started! Here are the details:
 Class Title: ${classDetails.title}
 Description: ${classDetails.description || 'No description provided'}
 Program: ${classDetails.program}
-Start Time: ${startTime.toLocaleTimeString()}
-End Time: ${endTime.toLocaleTimeString()}
+Start Time: ${startTimeFormatted.time} (${startTimeFormatted.timezone})
+End Time: ${endTimeFormatted.time} (${endTimeFormatted.timezone})
 Duration: ${classDetails.duration} minutes
 
 🎥 JOIN CLASS NOW:

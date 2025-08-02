@@ -1,6 +1,7 @@
 const express = require('express');
 const Notification = require('../model/notificationModel');
 const Student = require('../model/studentModel');
+const { formatTimeForStudent } = require('../utils/timezoneUtils');
 const router = express.Router();
 
 // Helper function to emit notification to student
@@ -234,8 +235,6 @@ router.post('/create-for-program', async (req, res) => {
   }
 });
 
-module.exports = router;
-
 // Test endpoint to create sample notifications
 router.post('/test/:studentEmail', async (req, res) => {
   try {
@@ -247,42 +246,54 @@ router.post('/test/:studentEmail', async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    // Create sample notifications
+    // Get timezone formatted times for student's country
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    
+    const tomorrowFormatted = formatTimeForStudent(tomorrow, student.country);
+    const twoHoursFromNowFormatted = formatTimeForStudent(twoHoursFromNow, student.country);
+    const twoHoursAgoFormatted = formatTimeForStudent(twoHoursAgo, student.country);
+
+    // Create sample notifications with timezone-aware messages
     const sampleNotifications = [
       {
         studentEmail,
         type: 'class_scheduled',
         title: 'New Class Scheduled',
-        message: 'Mathematics Class has been scheduled for tomorrow at 10:00 AM',
+        message: `Mathematics Class has been scheduled for ${tomorrowFormatted.date} at ${tomorrowFormatted.time} (${tomorrowFormatted.timezone})`,
         metadata: {
           classTitle: 'Mathematics Class',
           program: student.program,
-          startTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // tomorrow
-          duration: 60
+          startTime: tomorrow,
+          duration: 60,
+          timezone: tomorrowFormatted.timezone
         }
       },
       {
         studentEmail,
         type: 'class_updated',
         title: 'Class Updated',
-        message: 'Science Class time has been changed to 2:00 PM',
+        message: `Science Class time has been changed to ${twoHoursFromNowFormatted.time} (${twoHoursFromNowFormatted.timezone})`,
         metadata: {
           classTitle: 'Science Class',
           program: student.program,
-          startTime: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
-          duration: 90
+          startTime: twoHoursFromNow,
+          duration: 90,
+          timezone: twoHoursFromNowFormatted.timezone
         }
       },
       {
         studentEmail,
         type: 'class_cancelled',
         title: 'Class Cancelled',
-        message: 'English Class scheduled for today has been cancelled',
+        message: `English Class scheduled for ${twoHoursAgoFormatted.date} at ${twoHoursAgoFormatted.time} (${twoHoursAgoFormatted.timezone}) has been cancelled`,
         metadata: {
           classTitle: 'English Class',
           program: student.program,
-          startTime: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-          duration: 60
+          startTime: twoHoursAgo,
+          duration: 60,
+          timezone: twoHoursAgoFormatted.timezone
         }
       }
     ];
@@ -306,3 +317,38 @@ router.post('/test/:studentEmail', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 }); 
+
+// Test endpoint to verify timezone conversion
+router.get('/test-timezone/:studentEmail', async (req, res) => {
+  try {
+    const { studentEmail } = req.params;
+    
+    // Verify student exists
+    const student = await Student.findOne({ email: studentEmail });
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Test timezone conversion
+    const testTime = new Date();
+    const formattedTime = formatTimeForStudent(testTime, student.country);
+    
+    res.json({
+      student: {
+        email: student.email,
+        country: student.country,
+        fullName: student.fullName
+      },
+      timezoneTest: {
+        utcTime: testTime.toISOString(),
+        localTime: formattedTime,
+        timezone: formattedTime.timezone
+      }
+    });
+  } catch (err) {
+    console.error('Error testing timezone conversion:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+module.exports = router; 

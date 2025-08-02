@@ -5,6 +5,7 @@ const Attendance = require('../model/attendanceModel');
 const Notification = require('../model/notificationModel');
 const AdminNotification = require('../model/adminNotificationModel');
 const { sendClassScheduledEmail, sendClassUpdatedEmail, sendClassCancelledEmail, sendClassStartedEmail } = require('../utils/emailService');
+const { formatTimeForStudent } = require('../utils/timezoneUtils');
 const router = express.Router();
 
 // Function to send emails to all students in a program
@@ -14,7 +15,7 @@ const sendEmailsToProgramStudents = async (program, emailFunction, classDetails)
     
     const emailPromises = students.map(async (student) => {
       try {
-        await emailFunction(student.email, student.fullName || 'Student', classDetails);
+        await emailFunction(student.email, student.fullName || 'Student', classDetails, student.country);
         console.log(`Email sent to ${student.email} for class: ${classDetails.title}`);
       } catch (error) {
         console.error(`Failed to send email to ${student.email}:`, error);
@@ -37,18 +38,23 @@ const createNotificationsForProgram = async (program, notificationType, classDet
       try {
         let title, message;
         
+        // Get timezone formatted times for student's country
+        const startTimeFormatted = formatTimeForStudent(classDetails.startTime, student.country);
+        const endTime = new Date(classDetails.startTime.getTime() + (classDetails.duration * 60000));
+        const endTimeFormatted = formatTimeForStudent(endTime, student.country);
+        
         switch (notificationType) {
           case 'class_scheduled':
             title = 'New Class Scheduled';
-            message = `${classDetails.title} has been scheduled for ${new Date(classDetails.startTime).toLocaleDateString()} at ${new Date(classDetails.startTime).toLocaleTimeString()}`;
+            message = `${classDetails.title} has been scheduled for ${startTimeFormatted.date} at ${startTimeFormatted.time} (${startTimeFormatted.timezone})`;
             break;
           case 'class_updated':
             title = 'Class Updated';
-            message = `${classDetails.title} has been updated. New time: ${new Date(classDetails.startTime).toLocaleDateString()} at ${new Date(classDetails.startTime).toLocaleTimeString()}`;
+            message = `${classDetails.title} has been updated. New time: ${startTimeFormatted.date} at ${startTimeFormatted.time} (${startTimeFormatted.timezone})`;
             break;
           case 'class_cancelled':
             title = 'Class Cancelled';
-            message = `${classDetails.title} scheduled for ${new Date(classDetails.startTime).toLocaleDateString()} has been cancelled`;
+            message = `${classDetails.title} scheduled for ${startTimeFormatted.date} at ${startTimeFormatted.time} (${startTimeFormatted.timezone}) has been cancelled`;
             break;
           case 'class_started':
             title = '🎥 LIVE CLASS STARTED';
@@ -69,7 +75,10 @@ const createNotificationsForProgram = async (program, notificationType, classDet
             classTitle: classDetails.title,
             program: classDetails.program,
             startTime: classDetails.startTime,
-            duration: classDetails.duration
+            duration: classDetails.duration,
+            timezone: startTimeFormatted.timezone,
+            localStartTime: startTimeFormatted.fullDateTime,
+            localEndTime: endTimeFormatted.fullDateTime
           }
         });
         
