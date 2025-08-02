@@ -252,10 +252,59 @@ router.get('/student/:studentId', async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    const attendanceHistory = await Attendance.find({ studentId })
-      .populate('classId', 'title startTime duration program')
-      .lean();
+    // First get the student details to know their program
+    const student = await Student.findById(studentId).lean();
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
 
+    // Get all completed/expired classes for the student's program
+    const allClasses = await ClassSchedule.find({
+      program: student.program,
+      status: { $in: ['completed', 'expired'] }
+    }).lean();
+
+    // Get all attendance records for this student
+    const studentAttendanceRecords = await Attendance.find({ studentId }).lean();
+
+    // Create a map of classId to attendance record for quick lookup
+    const attendanceMap = {};
+    studentAttendanceRecords.forEach(record => {
+      attendanceMap[record.classId.toString()] = record;
+    });
+
+    // Create complete attendance history including classes where student didn't join
+    const attendanceHistory = allClasses.map(classSession => {
+      const attendanceRecord = attendanceMap[classSession._id.toString()];
+      
+      if (attendanceRecord) {
+        // Student joined this class
+        return {
+          _id: attendanceRecord._id,
+          classId: classSession,
+          studentId: student._id,
+          joinTime: attendanceRecord.joinTime,
+          leaveTime: attendanceRecord.leaveTime,
+          duration: attendanceRecord.duration,
+          status: attendanceRecord.status,
+          isAttendanceMarked: attendanceRecord.isAttendanceMarked
+        };
+      } else {
+        // Student didn't join this class - mark as absent
+        return {
+          _id: `absent_${classSession._id}_${studentId}`,
+          classId: classSession,
+          studentId: student._id,
+          joinTime: classSession.startTime,
+          leaveTime: null,
+          duration: 0,
+          status: 'absent',
+          isAttendanceMarked: true
+        };
+      }
+    });
+
+    // Calculate statistics based on the complete history
     const stats = {
       totalClasses: attendanceHistory.length,
       present: attendanceHistory.filter(r => r.status === 'present').length,
@@ -273,6 +322,67 @@ router.get('/student/:studentId', async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching student attendance:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Debug endpoint to check student attendance data
+router.get('/debug/student/:studentId', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // Get student details
+    const student = await Student.findById(studentId).lean();
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Get all classes for the student's program
+    const allClasses = await ClassSchedule.find({
+      program: student.program,
+      status: { $in: ['completed', 'expired'] }
+    }).lean();
+
+    // Get student's attendance records
+    const studentAttendanceRecords = await Attendance.find({ studentId }).lean();
+
+    // Get detailed attendance for each class
+    const detailedAttendance = await Promise.all(allClasses.map(async (classSession) => {
+      const attendanceRecord = studentAttendanceRecords.find(
+        record => record.classId.toString() === classSession._id.toString()
+      );
+
+      return {
+        classId: classSession._id,
+        className: classSession.title,
+        classStartTime: classSession.startTime,
+        classDuration: classSession.duration,
+        studentJoined: !!attendanceRecord,
+        attendanceRecord: attendanceRecord ? {
+          joinTime: attendanceRecord.joinTime,
+          leaveTime: attendanceRecord.leaveTime,
+          duration: attendanceRecord.duration,
+          status: attendanceRecord.status,
+          isAttendanceMarked: attendanceRecord.isAttendanceMarked
+        } : null,
+        expectedStatus: attendanceRecord ? attendanceRecord.status : 'absent'
+      };
+    }));
+
+    res.json({
+      student: {
+        _id: student._id,
+        fullName: student.fullName,
+        email: student.email,
+        program: student.program
+      },
+      totalClasses: allClasses.length,
+      classesJoined: studentAttendanceRecords.length,
+      classesNotJoined: allClasses.length - studentAttendanceRecords.length,
+      detailedAttendance
+    });
+  } catch (err) {
+    console.error('Error in debug endpoint:', err);
     res.status(500).json({ message: err.message });
   }
 });
