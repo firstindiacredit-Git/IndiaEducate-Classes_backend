@@ -769,6 +769,34 @@ router.get('/active/:program', async (req, res) => {
   }
 });
 
+// Get all ongoing classes
+router.get('/ongoing', async (req, res) => {
+  try {
+    const ongoingClasses = await ClassSchedule.find({ status: 'ongoing' })
+      .populate('adminId', 'fullName email')
+      .lean();
+
+    res.json(ongoingClasses);
+  } catch (err) {
+    console.error('Error fetching ongoing classes:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all classes
+router.get('/all', async (req, res) => {
+  try {
+    const allClasses = await ClassSchedule.find()
+      .sort({ startTime: 1 })
+      .lean();
+
+    res.json(allClasses);
+  } catch (err) {
+    console.error('Error fetching all classes:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get completed sessions count and details
 router.get('/completed-sessions', async (req, res) => {
   try {

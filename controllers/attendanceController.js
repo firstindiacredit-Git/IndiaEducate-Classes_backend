@@ -7,6 +7,62 @@ const router = express.Router();
 // Record student join time
 router.post('/join', async (req, res) => {
   try {
+    const { classId, studentId, isReconnect = false } = req.body;
+
+    // Check if class exists and is ongoing
+    const classSession = await ClassSchedule.findOne({
+      _id: classId,
+      status: 'ongoing'
+    });
+
+    if (!classSession) {
+      return res.status(404).json({ message: 'Class not found or not ongoing' });
+    }
+
+    // Check if attendance record already exists
+    const existingAttendance = await Attendance.findOne({ classId, studentId });
+    
+    if (existingAttendance && !isReconnect) {
+      // Student already joined, don't create duplicate record
+      return res.json({
+        message: 'Already joined this class',
+        attendance: existingAttendance,
+        isReconnect: true
+      });
+    }
+
+    // Create or update attendance record
+    const attendance = await Attendance.findOneAndUpdate(
+      { classId, studentId },
+      {
+        $setOnInsert: {
+          joinTime: new Date(),
+          status: 'partial', // Start with partial, will be updated when they leave
+          duration: 0,
+          isAttendanceMarked: false
+        },
+        $set: {
+          // Update join time only if this is a reconnect
+          ...(isReconnect && { joinTime: new Date() })
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      message: isReconnect ? 'Reconnected successfully' : 'Join time recorded',
+      attendance,
+      isReconnect
+    });
+  } catch (err) {
+    console.error('Error recording join time:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Handle reconnection scenario
+router.post('/reconnect', async (req, res) => {
+  try {
     const { classId, studentId } = req.body;
 
     // Check if class exists and is ongoing
@@ -19,26 +75,47 @@ router.post('/join', async (req, res) => {
       return res.status(404).json({ message: 'Class not found or not ongoing' });
     }
 
-    // Create or update attendance record
-    const attendance = await Attendance.findOneAndUpdate(
+    // Find existing attendance record
+    const existingAttendance = await Attendance.findOne({ classId, studentId });
+    
+    if (!existingAttendance) {
+      // No existing record, create new one
+      const newAttendance = await Attendance.create({
+        classId,
+        studentId,
+        joinTime: new Date(),
+        status: 'partial',
+        duration: 0,
+        isAttendanceMarked: false
+      });
+
+      return res.json({
+        message: 'New attendance record created',
+        attendance: newAttendance,
+        isReconnect: false
+      });
+    }
+
+    // Update existing record for reconnection
+    const updatedAttendance = await Attendance.findOneAndUpdate(
       { classId, studentId },
       {
-        $setOnInsert: {
-          joinTime: new Date(),
-          status: 'partial', // Start with partial, will be updated when they leave
-          duration: 0,
-          isAttendanceMarked: false
-        }
+        // Don't update joinTime if student was already present for significant time
+        // Only update if they were present for less than 5 minutes
+        ...(existingAttendance.duration < 5 && { joinTime: new Date() }),
+        status: 'partial',
+        isAttendanceMarked: false
       },
-      { upsert: true, new: true }
+      { new: true }
     );
 
     res.json({
-      message: 'Join time recorded',
-      attendance
+      message: 'Reconnected successfully',
+      attendance: updatedAttendance,
+      isReconnect: true
     });
   } catch (err) {
-    console.error('Error recording join time:', err);
+    console.error('Error handling reconnection:', err);
     res.status(500).json({ message: err.message });
   }
 });
