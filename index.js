@@ -89,7 +89,7 @@ app.use('/api/admin/notifications', adminNotificationRoutes);
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Catch-all route for SPA - must be after API routes
-app.get('/', (req, res) => {
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
