@@ -116,6 +116,8 @@ const classScheduleRoutes = require('./controllers/classScheduleController');
 const attendanceRoutes = require('./controllers/attendanceController');
 const notificationRoutes = require('./controllers/notificationController');
 const adminNotificationRoutes = require('./controllers/adminNotificationController');
+const fileUploadRoutes = require('./controllers/fileUploadController');
+const studentFileRoutes = require('./controllers/studentFileController');
 
 // API Routes
 app.use('/api/admin', adminRoutes);
@@ -124,6 +126,8 @@ app.use('/api/classes', classScheduleRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin/notifications', adminNotificationRoutes);
+app.use('/api/admin/files', fileUploadRoutes);
+app.use('/api/student/files', studentFileRoutes);
 
 
 app.use(express.static(path.join(__dirname, 'dist')));

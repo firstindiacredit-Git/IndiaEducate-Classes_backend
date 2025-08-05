@@ -4,13 +4,39 @@ const { formatTimeForStudent } = require('./timezoneUtils');
 // Create transporter with error handling
 let transporter;
 try {
-  transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+  // Option 1: Gmail (current)
+  if (process.env.EMAIL_SERVICE === 'gmail' || !process.env.EMAIL_SERVICE) {
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      // Add these settings for better delivery and to avoid spam
+      secure: true,
+      tls: {
+        rejectUnauthorized: false
+      },
+      // Add headers to improve deliverability
+      headers: {
+        'List-Unsubscribe': '<mailto:unsubscribe@indiaeducates.com>',
+        'Precedence': 'bulk',
+        'X-Auto-Response-Suppress': 'OOF, AutoReply'
+      }
+    });
+  }
+  // Option 2: SendGrid (alternative for better deliverability)
+  else if (process.env.EMAIL_SERVICE === 'sendgrid') {
+    transporter = nodemailer.createTransport({
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      secure: false,
+      auth: {
+        user: 'apikey',
+        pass: process.env.SENDGRID_API_KEY,
+      },
+    });
+  }
 } catch (error) {
   console.error('Failed to create email transporter:', error);
 }
@@ -33,10 +59,48 @@ const verifyTransporter = async () => {
 async function sendOTPEmail(to, otp) {
   await verifyTransporter();
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: `"India Educates" <${process.env.EMAIL_USER}>`,
     to,
-    subject: 'Your OTP Code',
-    text: `Your OTP code is: ${otp}`,
+    subject: 'Your Login Verification Code - India Educates',
+    text: `Hello,
+
+You have requested to login to your India Educates account.
+
+Your verification code is: ${otp}
+
+This code will expire in 10 minutes.
+
+If you did not request this code, please ignore this email.
+
+Best regards,
+India Educates Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #333; margin: 0;">India Educates</h2>
+        </div>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="color: #333; margin-top: 0;">Login Verification</h3>
+          <p>You have requested to login to your India Educates account.</p>
+          
+          <div style="background-color: #007bff; color: white; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
+            <h2 style="margin: 0; font-size: 24px;">Your Verification Code</h2>
+            <h1 style="margin: 10px 0; font-size: 32px; letter-spacing: 5px;">${otp}</h1>
+          </div>
+          
+          <p><strong>This code will expire in 10 minutes.</strong></p>
+        </div>
+        
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107;">
+          <p style="margin: 0; color: #856404;"><strong>Security Notice:</strong> If you did not request this code, please ignore this email and ensure your account is secure.</p>
+        </div>
+        
+        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 12px;">
+          <p>Best regards,<br>India Educates Team</p>
+        </div>
+      </div>
+    `
   });
 }
 
