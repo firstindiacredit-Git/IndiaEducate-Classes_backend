@@ -242,7 +242,13 @@ const formatTimeForStudent = (utcTime, countryName) => {
 // Function to get current time in student's timezone
 const getCurrentTimeInStudentTimezone = (countryName) => {
   const timezone = getTimezoneFromCountry(countryName);
-  return moment().tz(timezone);
+  const currentTime = moment().tz(timezone);
+  return {
+    date: currentTime.format('MMMM Do YYYY'),
+    time: currentTime.format('h:mm A'),
+    fullDateTime: currentTime.format('MMMM Do YYYY, h:mm A'),
+    timezone: currentTime.format('z')
+  };
 };
 
 module.exports = {

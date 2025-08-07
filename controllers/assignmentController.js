@@ -13,6 +13,63 @@ function getWeekNumber(date) {
   return Math.ceil((days + startOfYear.getDay() + 1) / 7);
 }
 
+// Helper function to send assignment notifications
+const sendAssignmentNotifications = async (assignmentId, adminEmailOrPhone, protocol, host) => {
+  try {
+    // Make API call to notification service
+    const response = await fetch(`${protocol}://${host}/api/notifications/assignment-created`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        assignmentId: assignmentId,
+        adminEmailOrPhone: adminEmailOrPhone
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Failed to send assignment notifications');
+    }
+  } catch (error) {
+    console.error('Error sending assignment notifications:', error);
+  }
+};
+
+// Helper function to send assignment review notifications
+const sendAssignmentReviewNotifications = async (submission, adminEmailOrPhone, protocol, host) => {
+  try {
+    const student = await Student.findById(submission.student);
+    const assignment = await Assignment.findById(submission.assignment);
+    
+    if (!student || !assignment) {
+      return;
+    }
+
+    // Make API call to notification service
+    const response = await fetch(`${protocol}://${host}/api/notifications/assignment-reviewed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        studentEmail: student.email,
+        assignmentTitle: assignment.title,
+        score: submission.totalScore,
+        totalMarks: assignment.totalMarks,
+        isPassed: submission.isPassed,
+        adminFeedback: submission.adminFeedback
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Failed to send assignment review notifications');
+    }
+  } catch (error) {
+    console.error('Error sending assignment review notifications:', error);
+  }
+};
+
 // Create Assignment (Admin only)
 router.post('/create', async (req, res) => {
   try {
@@ -90,6 +147,11 @@ router.post('/create', async (req, res) => {
     });
 
     await assignment.save();
+
+    // Send notifications to students
+    setTimeout(() => {
+      sendAssignmentNotifications(assignment._id, adminEmailOrPhone, req.protocol, req.get('host'));
+    }, 100);
 
     res.status(201).json({ 
       message: 'Assignment created successfully', 
@@ -299,6 +361,11 @@ router.patch('/submission/:submissionId/review', async (req, res) => {
     submission.reviewedAt = new Date();
 
     await submission.save();
+
+    // Send review notification to student
+    setTimeout(() => {
+      sendAssignmentReviewNotifications(submission, adminEmailOrPhone, req.protocol, req.get('host'));
+    }, 100);
 
     res.json({ message: 'Submission reviewed successfully', submission });
   } catch (err) {

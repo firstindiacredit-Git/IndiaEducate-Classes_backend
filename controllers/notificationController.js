@@ -1,7 +1,18 @@
 const express = require('express');
 const Notification = require('../model/notificationModel');
 const Student = require('../model/studentModel');
+const FileUpload = require('../model/fileUploadModel');
+const Quiz = require('../model/quizModel');
+const Assignment = require('../model/assignmentModel');
 const { formatTimeForStudent } = require('../utils/timezoneUtils');
+const { 
+  sendStudyMaterialNotificationEmail,
+  sendQuizNotificationEmail,
+  sendAssignmentNotificationEmail,
+  sendWeeklyTestNotificationEmail,
+  sendAssignmentReviewNotificationEmail,
+  sendQuizReviewNotificationEmail
+} = require('../utils/emailService');
 const router = express.Router();
 
 // Helper function to emit notification to student
@@ -12,6 +23,35 @@ const emitNotificationToStudent = (studentEmail, notification) => {
       unreadCount: 1 // Increment by 1 for new notification
     });
     // console.log(`Emitted notification to student: ${studentEmail}`);
+  }
+};
+
+// Helper function to create notification and send email
+const createNotificationWithEmail = async (studentEmail, notificationData, emailData = null) => {
+  try {
+    // Create notification in database
+    const notification = await Notification.create({
+      studentEmail,
+      ...notificationData
+    });
+
+    // Emit real-time notification
+    emitNotificationToStudent(studentEmail, notification);
+
+    // Send email notification if email data is provided
+    if (emailData) {
+      try {
+        await emailData.sendEmailFunction(studentEmail, emailData.params);
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        // Don't fail the notification creation if email fails
+      }
+    }
+
+    return notification;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    throw error;
   }
 };
 
@@ -159,6 +199,426 @@ router.delete('/:notificationId', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// ===== STUDY MATERIAL NOTIFICATIONS =====
+
+// Notify students about new study material upload
+router.post('/study-material-uploaded', async (req, res) => {
+  try {
+    const { fileId, adminEmailOrPhone } = req.body;
+
+    // Get file details
+    const file = await FileUpload.findById(fileId).populate('uploadedBy', 'fullName');
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Get all students (or filter by program if needed)
+    const students = await Student.find({ isVerified: true });
+    
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'No students found' });
+    }
+
+    // Create notifications for all students
+    const notifications = [];
+    for (const student of students) {
+      const notificationData = {
+        type: 'study_material_uploaded',
+        title: 'New Study Material Available',
+        message: `New ${file.fileType} file "${file.fileName}" has been uploaded by ${file.uploadedBy.fullName}`,
+        metadata: {
+          fileId: file._id,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          category: file.category,
+          uploadedBy: file.uploadedBy.fullName,
+          fileSize: file.fileSize,
+          description: file.description
+        }
+      };
+
+      const emailData = {
+        sendEmailFunction: sendStudyMaterialNotificationEmail,
+        params: {
+          studentName: student.fullName,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          category: file.category,
+          uploadedBy: file.uploadedBy.fullName,
+          description: file.description,
+          fileSize: file.fileSize,
+          studentCountry: student.country
+        }
+      };
+
+      const notification = await createNotificationWithEmail(student.email, notificationData, emailData);
+      notifications.push(notification);
+    }
+
+    res.status(201).json({
+      message: `Notifications sent to ${students.length} students`,
+      count: notifications.length
+    });
+  } catch (err) {
+    console.error('Error creating study material notifications:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ===== QUIZ NOTIFICATIONS =====
+
+// Notify students about new quiz
+router.post('/quiz-created', async (req, res) => {
+  try {
+    const { quizId, adminEmailOrPhone } = req.body;
+
+    // Get quiz details
+    const quiz = await Quiz.findById(quizId).populate('createdBy', 'fullName');
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    // Get students assigned to this quiz or all students if none assigned
+    let students;
+    if (quiz.assignedTo && quiz.assignedTo.length > 0) {
+      students = await Student.find({ 
+        _id: { $in: quiz.assignedTo },
+        isVerified: true 
+      });
+    } else {
+      students = await Student.find({ isVerified: true });
+    }
+
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'No students found' });
+    }
+
+    // Format dates for student timezones
+    const startDateFormatted = formatTimeForStudent(quiz.startDate, 'India'); // Default timezone
+    const endDateFormatted = formatTimeForStudent(quiz.endDate, 'India');
+
+    // Create notifications for students
+    const notifications = [];
+    for (const student of students) {
+      const studentStartDate = formatTimeForStudent(quiz.startDate, student.country);
+      const studentEndDate = formatTimeForStudent(quiz.endDate, student.country);
+
+      const notificationData = {
+        type: 'quiz_created',
+        title: 'New Quiz Available',
+        message: `New ${quiz.type} quiz "${quiz.title}" is now available. Duration: ${quiz.duration} minutes. Deadline: ${studentEndDate.date} at ${studentEndDate.time} (${studentEndDate.timezone})`,
+        metadata: {
+          quizId: quiz._id,
+          quizTitle: quiz.title,
+          quizType: quiz.type,
+          subject: quiz.subject,
+          duration: quiz.duration,
+          totalMarks: quiz.totalMarks,
+          passingMarks: quiz.passingMarks,
+          startDate: quiz.startDate,
+          endDate: quiz.endDate,
+          createdBy: quiz.createdBy.fullName,
+          studentTimezone: studentStartDate.timezone
+        }
+      };
+
+      const emailData = {
+        sendEmailFunction: sendQuizNotificationEmail,
+        params: {
+          studentName: student.fullName,
+          quizTitle: quiz.title,
+          quizType: quiz.type,
+          subject: quiz.subject,
+          duration: quiz.duration,
+          totalMarks: quiz.totalMarks,
+          passingMarks: quiz.passingMarks,
+          startDate: studentStartDate,
+          endDate: studentEndDate,
+          createdBy: quiz.createdBy.fullName,
+          studentCountry: student.country
+        }
+      };
+
+      const notification = await createNotificationWithEmail(student.email, notificationData, emailData);
+      notifications.push(notification);
+    }
+
+    res.status(201).json({
+      message: `Quiz notifications sent to ${students.length} students`,
+      count: notifications.length
+    });
+  } catch (err) {
+    console.error('Error creating quiz notifications:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Notify students about weekly test
+router.post('/weekly-test-created', async (req, res) => {
+  try {
+    const { quizId, adminEmailOrPhone } = req.body;
+
+    // Get quiz details
+    const quiz = await Quiz.findById(quizId).populate('createdBy', 'fullName');
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    // Get all students
+    const students = await Student.find({ isVerified: true });
+    
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'No students found' });
+    }
+
+    // Create notifications for all students
+    const notifications = [];
+    for (const student of students) {
+      const studentStartDate = formatTimeForStudent(quiz.startDate, student.country);
+      const studentEndDate = formatTimeForStudent(quiz.endDate, student.country);
+
+      const notificationData = {
+        type: 'weekly_test_created',
+        title: 'Weekly Test Available',
+        message: `Weekly ${quiz.subject} test "${quiz.title}" is now available. Duration: ${quiz.duration} minutes. Deadline: ${studentEndDate.date} at ${studentEndDate.time} (${studentEndDate.timezone})`,
+        metadata: {
+          quizId: quiz._id,
+          quizTitle: quiz.title,
+          subject: quiz.subject,
+          duration: quiz.duration,
+          totalMarks: quiz.totalMarks,
+          passingMarks: quiz.passingMarks,
+          startDate: quiz.startDate,
+          endDate: quiz.endDate,
+          createdBy: quiz.createdBy.fullName,
+          studentTimezone: studentStartDate.timezone,
+          weekNumber: quiz.weekNumber
+        }
+      };
+
+      const emailData = {
+        sendEmailFunction: sendWeeklyTestNotificationEmail,
+        params: {
+          studentName: student.fullName,
+          quizTitle: quiz.title,
+          subject: quiz.subject,
+          duration: quiz.duration,
+          totalMarks: quiz.totalMarks,
+          passingMarks: quiz.passingMarks,
+          startDate: studentStartDate,
+          endDate: studentEndDate,
+          createdBy: quiz.createdBy.fullName,
+          studentCountry: student.country,
+          weekNumber: quiz.weekNumber
+        }
+      };
+
+      const notification = await createNotificationWithEmail(student.email, notificationData, emailData);
+      notifications.push(notification);
+    }
+
+    res.status(201).json({
+      message: `Weekly test notifications sent to ${students.length} students`,
+      count: notifications.length
+    });
+  } catch (err) {
+    console.error('Error creating weekly test notifications:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ===== ASSIGNMENT NOTIFICATIONS =====
+
+// Notify students about new assignment
+router.post('/assignment-created', async (req, res) => {
+  try {
+    const { assignmentId, adminEmailOrPhone } = req.body;
+
+    // Get assignment details
+    const assignment = await Assignment.findById(assignmentId).populate('createdBy', 'fullName');
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    // Get students assigned to this assignment or all students if none assigned
+    let students;
+    if (assignment.assignedTo && assignment.assignedTo.length > 0) {
+      students = await Student.find({ 
+        _id: { $in: assignment.assignedTo },
+        isVerified: true 
+      });
+    } else {
+      students = await Student.find({ isVerified: true });
+    }
+
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'No students found' });
+    }
+
+    // Create notifications for students
+    const notifications = [];
+    for (const student of students) {
+      const studentStartDate = formatTimeForStudent(assignment.startDate, student.country);
+      const studentEndDate = formatTimeForStudent(assignment.endDate, student.country);
+
+      const notificationData = {
+        type: 'assignment_created',
+        title: 'New Assignment Available',
+        message: `New ${assignment.type} assignment "${assignment.title}" is now available. Duration: ${assignment.duration} minutes. Deadline: ${studentEndDate.date} at ${studentEndDate.time} (${studentEndDate.timezone})`,
+        metadata: {
+          assignmentId: assignment._id,
+          assignmentTitle: assignment.title,
+          assignmentType: assignment.type,
+          subject: assignment.subject,
+          duration: assignment.duration,
+          totalMarks: assignment.totalMarks,
+          passingMarks: assignment.passingMarks,
+          startDate: assignment.startDate,
+          endDate: assignment.endDate,
+          createdBy: assignment.createdBy.fullName,
+          studentTimezone: studentStartDate.timezone,
+          instructions: assignment.instructions
+        }
+      };
+
+      const emailData = {
+        sendEmailFunction: sendAssignmentNotificationEmail,
+        params: {
+          studentName: student.fullName,
+          assignmentTitle: assignment.title,
+          assignmentType: assignment.type,
+          subject: assignment.subject,
+          duration: assignment.duration,
+          totalMarks: assignment.totalMarks,
+          passingMarks: assignment.passingMarks,
+          startDate: studentStartDate,
+          endDate: studentEndDate,
+          createdBy: assignment.createdBy.fullName,
+          studentCountry: student.country,
+          instructions: assignment.instructions
+        }
+      };
+
+      const notification = await createNotificationWithEmail(student.email, notificationData, emailData);
+      notifications.push(notification);
+    }
+
+    res.status(201).json({
+      message: `Assignment notifications sent to ${students.length} students`,
+      count: notifications.length
+    });
+  } catch (err) {
+    console.error('Error creating assignment notifications:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ===== REVIEW NOTIFICATIONS =====
+
+// Notify student about assignment review
+router.post('/assignment-reviewed', async (req, res) => {
+  try {
+    const { studentEmail, assignmentTitle, score, totalMarks, isPassed, adminFeedback } = req.body;
+
+    // Verify student exists
+    const student = await Student.findOne({ email: studentEmail });
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const notificationData = {
+      type: 'assignment_reviewed',
+      title: 'Assignment Reviewed',
+      message: `Your assignment "${assignmentTitle}" has been reviewed. Score: ${score}/${totalMarks} (${isPassed ? 'Passed' : 'Failed'})`,
+      metadata: {
+        assignmentTitle,
+        score,
+        totalMarks,
+        isPassed,
+        adminFeedback,
+        percentage: Math.round((score / totalMarks) * 100)
+      }
+    };
+
+    const emailData = {
+      sendEmailFunction: sendAssignmentReviewNotificationEmail,
+      params: {
+        studentName: student.fullName,
+        assignmentTitle,
+        score,
+        totalMarks,
+        isPassed,
+        adminFeedback,
+        percentage: Math.round((score / totalMarks) * 100),
+        studentCountry: student.country
+      }
+    };
+
+    const notification = await createNotificationWithEmail(studentEmail, notificationData, emailData);
+
+    res.status(201).json({
+      message: 'Assignment review notification sent',
+      notification
+    });
+  } catch (err) {
+    console.error('Error creating assignment review notification:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Notify student about quiz review
+router.post('/quiz-reviewed', async (req, res) => {
+  try {
+    const { studentEmail, quizTitle, score, totalMarks, isPassed, adminFeedback } = req.body;
+
+    // Verify student exists
+    const student = await Student.findOne({ email: studentEmail });
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const notificationData = {
+      type: 'quiz_reviewed',
+      title: 'Quiz Reviewed',
+      message: `Your quiz "${quizTitle}" has been reviewed. Score: ${score}/${totalMarks} (${isPassed ? 'Passed' : 'Failed'})`,
+      metadata: {
+        quizTitle,
+        score,
+        totalMarks,
+        isPassed,
+        adminFeedback,
+        percentage: Math.round((score / totalMarks) * 100)
+      }
+    };
+
+    const emailData = {
+      sendEmailFunction: sendQuizReviewNotificationEmail,
+      params: {
+        studentName: student.fullName,
+        quizTitle,
+        score,
+        totalMarks,
+        isPassed,
+        adminFeedback,
+        percentage: Math.round((score / totalMarks) * 100),
+        studentCountry: student.country
+      }
+    };
+
+    const notification = await createNotificationWithEmail(studentEmail, notificationData, emailData);
+
+    res.status(201).json({
+      message: 'Quiz review notification sent',
+      notification
+    });
+  } catch (err) {
+    console.error('Error creating quiz review notification:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ===== LEGACY ENDPOINTS (for backward compatibility) =====
 
 // Create notification (admin function)
 router.post('/create', async (req, res) => {

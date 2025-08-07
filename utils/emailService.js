@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const { formatTimeForStudent } = require('./timezoneUtils');
+const { formatTimeForStudent, getTimezoneFromCountry, getCurrentTimeInStudentTimezone } = require('./timezoneUtils');
 
 // Create transporter with error handling
 let transporter;
@@ -55,6 +55,17 @@ const verifyTransporter = async () => {
     throw new Error('Email configuration is invalid. Please check your email credentials.');
   }
 };
+
+// Add this helper function for sending emails
+async function sendEmail(to, subject, html) {
+  await verifyTransporter();
+  await transporter.sendMail({
+    from: `"India Educates" <${process.env.EMAIL_USER}>`,
+    to,
+    subject,
+    html
+  });
+}
 
 async function sendOTPEmail(to, otp) {
   await verifyTransporter();
@@ -315,12 +326,478 @@ India Educates Team
   });
 }
 
-module.exports = { 
-  sendOTPEmail, 
-  sendCredentialsEmail, 
+// Study Material Notification Email
+async function sendStudyMaterialNotificationEmail(to, params) {
+  const { studentName, fileName, fileType, category, uploadedBy, description, fileSize, studentCountry } = params;
+  
+  const currentTime = getCurrentTimeInStudentTimezone(studentCountry);
+  
+  const subject = 'New Study Material Available - IndiaEducates';
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>New Study Material</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .file-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }
+        .file-type { display: inline-block; background: #667eea; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .category { display: inline-block; background: #764ba2; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; margin-left: 10px; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+        .timezone { background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📚 New Study Material Available</h1>
+          <p>Hello ${studentName},</p>
+        </div>
+        
+        <div class="content">
+          <p>Great news! A new study material has been uploaded to your learning platform.</p>
+          
+          <div class="file-info">
+            <h3>📄 ${fileName}</h3>
+            <p><span class="file-type">${fileType.toUpperCase()}</span> <span class="category">${category}</span></p>
+            <p><strong>Uploaded by:</strong> ${uploadedBy}</p>
+            <p><strong>File size:</strong> ${(fileSize / (1024 * 1024)).toFixed(2)} MB</p>
+            ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
+          </div>
+          
+          <div class="timezone">
+            <strong>⏰ Your Local Time:</strong> ${currentTime.time} (${currentTime.timezone})
+          </div>
+          
+          <p>You can access this material from your student dashboard under the "File Library" section.</p>
+          
+          <p style="margin-top: 30px;">
+            <strong>Best regards,</strong><br>
+            IndiaEducates Team
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>This is an automated notification from IndiaEducates Learning Platform</p>
+          <p>Current time in your timezone: ${currentTime.date} at ${currentTime.time}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await sendEmail(to, subject, htmlContent);
+}
+
+// Quiz Notification Email
+async function sendQuizNotificationEmail(to, params) {
+  const { studentName, quizTitle, quizType, subject, duration, totalMarks, passingMarks, startDate, endDate, createdBy, studentCountry } = params;
+  
+  const currentTime = getCurrentTimeInStudentTimezone(studentCountry);
+  
+  const subject_line = 'New Quiz Available - IndiaEducates';
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>New Quiz Available</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .quiz-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff6b6b; }
+        .quiz-type { display: inline-block; background: #ff6b6b; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .subject { display: inline-block; background: #ee5a24; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; margin-left: 10px; }
+        .deadline { background: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #ffc107; }
+        .timezone { background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 14px; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📝 New Quiz Available</h1>
+          <p>Hello ${studentName},</p>
+        </div>
+        
+        <div class="content">
+          <p>A new quiz has been created and is now available for you to take.</p>
+          
+          <div class="quiz-info">
+            <h3>📋 ${quizTitle}</h3>
+            <p><span class="quiz-type">${quizType.toUpperCase()}</span> <span class="subject">${subject}</span></p>
+            <p><strong>Duration:</strong> ${duration} minutes</p>
+            <p><strong>Total Marks:</strong> ${totalMarks}</p>
+            <p><strong>Passing Marks:</strong> ${passingMarks}</p>
+            <p><strong>Created by:</strong> ${createdBy}</p>
+          </div>
+          
+          <div class="deadline">
+            <h4>⏰ Important Deadlines</h4>
+            <p><strong>Available from:</strong> ${startDate.date} at ${startDate.time} (${startDate.timezone})</p>
+            <p><strong>Deadline:</strong> ${endDate.date} at ${endDate.time} (${endDate.timezone})</p>
+          </div>
+          
+          <div class="timezone">
+            <strong>⏰ Your Local Time:</strong> ${currentTime.time} (${currentTime.timezone})
+          </div>
+          
+          <p>You can access this quiz from your student dashboard under the "Quiz Dashboard" section.</p>
+          
+          <p style="margin-top: 30px;">
+            <strong>Best regards,</strong><br>
+            IndiaEducates Team
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>This is an automated notification from IndiaEducates Learning Platform</p>
+          <p>Current time in your timezone: ${currentTime.date} at ${currentTime.time}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await sendEmail(to, subject_line, htmlContent);
+}
+
+// Weekly Test Notification Email
+async function sendWeeklyTestNotificationEmail(to, params) {
+  const { studentName, quizTitle, subject, duration, totalMarks, passingMarks, startDate, endDate, createdBy, studentCountry, weekNumber } = params;
+  
+  const currentTime = getCurrentTimeInStudentTimezone(studentCountry);
+  
+  const subject_line = `Weekly Test - Week ${weekNumber} - IndiaEducates`;
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Weekly Test Available</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .quiz-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }
+        .week-badge { display: inline-block; background: #667eea; color: white; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; }
+        .subject { display: inline-block; background: #764ba2; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; margin-left: 10px; }
+        .deadline { background: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #ffc107; }
+        .timezone { background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 14px; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📊 Weekly Test Available</h1>
+          <p>Hello ${studentName},</p>
+        </div>
+        
+        <div class="content">
+          <p>Your weekly test for this week is now available!</p>
+          
+          <div class="quiz-info">
+            <h3>📋 ${quizTitle}</h3>
+            <p><span class="week-badge">Week ${weekNumber}</span> <span class="subject">${subject}</span></p>
+            <p><strong>Duration:</strong> ${duration} minutes</p>
+            <p><strong>Total Marks:</strong> ${totalMarks}</p>
+            <p><strong>Passing Marks:</strong> ${passingMarks}</p>
+            <p><strong>Created by:</strong> ${createdBy}</p>
+          </div>
+          
+          <div class="deadline">
+            <h4>⏰ Important Deadlines</h4>
+            <p><strong>Available from:</strong> ${startDate.date} at ${startDate.time} (${startDate.timezone})</p>
+            <p><strong>Deadline:</strong> ${endDate.date} at ${endDate.time} (${endDate.timezone})</p>
+          </div>
+          
+          <div class="timezone">
+            <strong>⏰ Your Local Time:</strong> ${currentTime.time} (${currentTime.timezone})
+          </div>
+          
+          <p>You can access this weekly test from your student dashboard under the "Quiz Dashboard" section.</p>
+          
+          <p style="margin-top: 30px;">
+            <strong>Best regards,</strong><br>
+            IndiaEducates Team
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>This is an automated notification from IndiaEducates Learning Platform</p>
+          <p>Current time in your timezone: ${currentTime.date} at ${currentTime.time}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await sendEmail(to, subject_line, htmlContent);
+}
+
+// Assignment Notification Email
+async function sendAssignmentNotificationEmail(to, params) {
+  const { studentName, assignmentTitle, assignmentType, subject, duration, totalMarks, passingMarks, startDate, endDate, createdBy, studentCountry, instructions } = params;
+  
+  const currentTime = getCurrentTimeInStudentTimezone(studentCountry);
+  
+  const subject_line = 'New Assignment Available - IndiaEducates';
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>New Assignment Available</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .assignment-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4ecdc4; }
+        .assignment-type { display: inline-block; background: #4ecdc4; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .subject { display: inline-block; background: #44a08d; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; margin-left: 10px; }
+        .deadline { background: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #ffc107; }
+        .instructions { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #17a2b8; }
+        .timezone { background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 14px; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📝 New Assignment Available</h1>
+          <p>Hello ${studentName},</p>
+        </div>
+        
+        <div class="content">
+          <p>A new assignment has been created and is now available for you to complete.</p>
+          
+          <div class="assignment-info">
+            <h3>📋 ${assignmentTitle}</h3>
+            <p><span class="assignment-type">${assignmentType.toUpperCase()}</span> <span class="subject">${subject}</span></p>
+            <p><strong>Duration:</strong> ${duration} minutes</p>
+            <p><strong>Total Marks:</strong> ${totalMarks}</p>
+            <p><strong>Passing Marks:</strong> ${passingMarks}</p>
+            <p><strong>Created by:</strong> ${createdBy}</p>
+          </div>
+          
+          ${instructions ? `
+          <div class="instructions">
+            <h4>📋 Instructions</h4>
+            <p>${instructions}</p>
+          </div>
+          ` : ''}
+          
+          <div class="deadline">
+            <h4>⏰ Important Deadlines</h4>
+            <p><strong>Available from:</strong> ${startDate.date} at ${startDate.time} (${startDate.timezone})</p>
+            <p><strong>Deadline:</strong> ${endDate.date} at ${endDate.time} (${endDate.timezone})</p>
+          </div>
+          
+          <div class="timezone">
+            <strong>⏰ Your Local Time:</strong> ${currentTime.time} (${currentTime.timezone})
+          </div>
+          
+          <p>You can access this assignment from your student dashboard under the "Assignment Dashboard" section.</p>
+          
+          <p style="margin-top: 30px;">
+            <strong>Best regards,</strong><br>
+            IndiaEducates Team
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>This is an automated notification from IndiaEducates Learning Platform</p>
+          <p>Current time in your timezone: ${currentTime.date} at ${currentTime.time}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await sendEmail(to, subject_line, htmlContent);
+}
+
+// Assignment Review Notification Email
+async function sendAssignmentReviewNotificationEmail(to, params) {
+  const { studentName, assignmentTitle, score, totalMarks, isPassed, adminFeedback, percentage, studentCountry } = params;
+  
+  const currentTime = getCurrentTimeInStudentTimezone(studentCountry);
+  
+  const subject_line = 'Assignment Reviewed - IndiaEducates';
+  
+  const statusColor = isPassed ? '#28a745' : '#dc3545';
+  const statusText = isPassed ? 'PASSED' : 'FAILED';
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Assignment Reviewed</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .result-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4ecdc4; }
+        .status { display: inline-block; background: ${statusColor}; color: white; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; }
+        .score { font-size: 24px; font-weight: bold; color: ${statusColor}; }
+        .feedback { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #6c757d; }
+        .timezone { background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 14px; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📝 Assignment Reviewed</h1>
+          <p>Hello ${studentName},</p>
+        </div>
+        
+        <div class="content">
+          <p>Your assignment has been reviewed by your instructor.</p>
+          
+          <div class="result-info">
+            <h3>📋 ${assignmentTitle}</h3>
+            <p><span class="status">${statusText}</span></p>
+            <p class="score">${score}/${totalMarks} (${percentage}%)</p>
+            <p><strong>Passing Marks:</strong> ${Math.ceil(totalMarks * 0.4)}</p>
+          </div>
+          
+          ${adminFeedback ? `
+          <div class="feedback">
+            <h4>💬 Instructor Feedback</h4>
+            <p>${adminFeedback}</p>
+          </div>
+          ` : ''}
+          
+          <div class="timezone">
+            <strong>⏰ Your Local Time:</strong> ${currentTime.time} (${currentTime.timezone})
+          </div>
+          
+          <p>You can view the detailed results from your student dashboard under the "Assignment History" section.</p>
+          
+          <p style="margin-top: 30px;">
+            <strong>Best regards,</strong><br>
+            IndiaEducates Team
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>This is an automated notification from IndiaEducates Learning Platform</p>
+          <p>Current time in your timezone: ${currentTime.date} at ${currentTime.time}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await sendEmail(to, subject_line, htmlContent);
+}
+
+// Quiz Review Notification Email
+async function sendQuizReviewNotificationEmail(to, params) {
+  const { studentName, quizTitle, score, totalMarks, isPassed, adminFeedback, percentage, studentCountry } = params;
+  
+  const currentTime = getCurrentTimeInStudentTimezone(studentCountry);
+  
+  const subject_line = 'Quiz Reviewed - IndiaEducates';
+  
+  const statusColor = isPassed ? '#28a745' : '#dc3545';
+  const statusText = isPassed ? 'PASSED' : 'FAILED';
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Quiz Reviewed</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .result-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff6b6b; }
+        .status { display: inline-block; background: ${statusColor}; color: white; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; }
+        .score { font-size: 24px; font-weight: bold; color: ${statusColor}; }
+        .feedback { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #6c757d; }
+        .timezone { background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 14px; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📝 Quiz Reviewed</h1>
+          <p>Hello ${studentName},</p>
+        </div>
+        
+        <div class="content">
+          <p>Your quiz has been reviewed by your instructor.</p>
+          
+          <div class="result-info">
+            <h3>📋 ${quizTitle}</h3>
+            <p><span class="status">${statusText}</span></p>
+            <p class="score">${score}/${totalMarks} (${percentage}%)</p>
+            <p><strong>Passing Marks:</strong> ${Math.ceil(totalMarks * 0.4)}</p>
+          </div>
+          
+          ${adminFeedback ? `
+          <div class="feedback">
+            <h4>💬 Instructor Feedback</h4>
+            <p>${adminFeedback}</p>
+          </div>
+          ` : ''}
+          
+          <div class="timezone">
+            <strong>⏰ Your Local Time:</strong> ${currentTime.time} (${currentTime.timezone})
+          </div>
+          
+          <p>You can view the detailed results from your student dashboard under the "Quiz History" section.</p>
+          
+          <p style="margin-top: 30px;">
+            <strong>Best regards,</strong><br>
+            IndiaEducates Team
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>This is an automated notification from IndiaEducates Learning Platform</p>
+          <p>Current time in your timezone: ${currentTime.date} at ${currentTime.time}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await sendEmail(to, subject_line, htmlContent);
+}
+
+module.exports = {
+  sendOTPEmail,
+  sendCredentialsEmail,
   sendProfileUpdateEmail,
   sendClassScheduledEmail,
   sendClassUpdatedEmail,
   sendClassCancelledEmail,
-  sendClassStartedEmail
+  sendClassStartedEmail,
+  sendStudyMaterialNotificationEmail,
+  sendQuizNotificationEmail,
+  sendWeeklyTestNotificationEmail,
+  sendAssignmentNotificationEmail,
+  sendAssignmentReviewNotificationEmail,
+  sendQuizReviewNotificationEmail
 };

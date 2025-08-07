@@ -13,6 +13,65 @@ function getWeekNumber(date) {
   return Math.ceil((days + startOfYear.getDay() + 1) / 7);
 }
 
+// Helper function to send quiz notifications
+const sendQuizNotifications = async (quizId, adminEmailOrPhone, isWeeklyTest = false, protocol, host) => {
+  try {
+    const endpoint = isWeeklyTest ? '/api/notifications/weekly-test-created' : '/api/notifications/quiz-created';
+    
+    // Make API call to notification service
+    const response = await fetch(`${protocol}://${host}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        quizId: quizId,
+        adminEmailOrPhone: adminEmailOrPhone
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Failed to send quiz notifications');
+    }
+  } catch (error) {
+    console.error('Error sending quiz notifications:', error);
+  }
+};
+
+// Helper function to send quiz review notifications
+const sendQuizReviewNotifications = async (submission, adminEmailOrPhone, protocol, host) => {
+  try {
+    const student = await Student.findById(submission.student);
+    const quiz = await Quiz.findById(submission.quiz);
+    
+    if (!student || !quiz) {
+      return;
+    }
+
+    // Make API call to notification service
+    const response = await fetch(`${protocol}://${host}/api/notifications/quiz-reviewed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        studentEmail: student.email,
+        quizTitle: quiz.title,
+        score: submission.totalMarksObtained,
+        totalMarks: quiz.totalMarks,
+        isPassed: submission.isPassed,
+        adminFeedback: submission.adminFeedback
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Failed to send quiz review notifications');
+    }
+  } catch (error) {
+    console.error('Error sending quiz review notifications:', error);
+  }
+};
+
 // Create Quiz (Admin only)
 router.post('/create', async (req, res) => {
   try {
@@ -30,6 +89,7 @@ router.post('/create', async (req, res) => {
       endDate, 
       assignedTo,
       weekNumber,
+      isWeeklyTest = false,
       adminEmailOrPhone 
     } = req.body;
 
@@ -83,6 +143,11 @@ router.post('/create', async (req, res) => {
     });
 
     await quiz.save();
+
+    // Send notifications to students
+    setTimeout(() => {
+      sendQuizNotifications(quiz._id, adminEmailOrPhone, isWeeklyTest, req.protocol, req.get('host'));
+    }, 100);
 
     res.status(201).json({ 
       message: 'Quiz created successfully', 
@@ -271,6 +336,11 @@ router.patch('/submission/:submissionId/review', async (req, res) => {
     submission.adminScore = adminScore;
     submission.isReviewed = true;
     await submission.save();
+
+    // Send review notification to student
+    setTimeout(() => {
+      sendQuizReviewNotifications(submission, adminEmailOrPhone, req.protocol, req.get('host'));
+    }, 100);
 
     res.json({ message: 'Submission reviewed successfully', submission });
   } catch (err) {

@@ -43,6 +43,34 @@ const verifyAdmin = async (req, res, next) => {
   }
 };
 
+// Helper function to send notifications for uploaded files
+const sendFileUploadNotifications = async (fileUpload, adminEmailOrPhone, protocol, host) => {
+  try {
+    // Only send notifications for public files
+    if (!fileUpload.isPublic) {
+      return;
+    }
+
+    // Make API call to notification service
+    const response = await fetch(`${protocol}://${host}/api/notifications/study-material-uploaded`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fileId: fileUpload._id,
+        adminEmailOrPhone: adminEmailOrPhone
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Failed to send file upload notifications');
+    }
+  } catch (error) {
+    console.error('Error sending file upload notifications:', error);
+  }
+};
+
 // Upload PDF file
 router.post('/upload-pdf', verifyAdmin, uploadPdfMiddleware, async (req, res) => {
   try {
@@ -50,7 +78,7 @@ router.post('/upload-pdf', verifyAdmin, uploadPdfMiddleware, async (req, res) =>
       return res.status(400).json({ message: 'No PDF file uploaded' });
     }
 
-    const { category, description, tags } = req.body;
+    const { category, description, tags, isPublic = true } = req.body;
     const fileInfo = getFileInfo(req.file);
 
     const fileUpload = new FileUpload({
@@ -58,10 +86,19 @@ router.post('/upload-pdf', verifyAdmin, uploadPdfMiddleware, async (req, res) =>
       category: category || 'study_material',
       description: description || '',
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-      uploadedBy: req.admin._id
+      uploadedBy: req.admin._id,
+      isPublic: isPublic === 'true' || isPublic === true
     });
 
     await fileUpload.save();
+
+    // Send notifications if file is public
+    if (fileUpload.isPublic) {
+      // Use setTimeout to avoid blocking the response
+      setTimeout(() => {
+        sendFileUploadNotifications(fileUpload, req.admin.email || req.admin.phone, req.protocol, req.get('host'));
+      }, 100);
+    }
 
     res.status(201).json({
       message: 'PDF uploaded successfully',
@@ -74,13 +111,12 @@ router.post('/upload-pdf', verifyAdmin, uploadPdfMiddleware, async (req, res) =>
 
 // Upload video file (recorded classes)
 router.post('/upload-video', verifyAdmin, uploadVideoMiddleware, async (req, res) => {
-  console.log('Video upload endpoint called');
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No video file uploaded' });
     }
 
-    const { category, description, tags } = req.body;
+    const { category, description, tags, isPublic = true } = req.body;
     const fileInfo = getFileInfo(req.file);
 
     const fileUpload = new FileUpload({
@@ -88,10 +124,19 @@ router.post('/upload-video', verifyAdmin, uploadVideoMiddleware, async (req, res
       category: category || 'recorded_class',
       description: description || '',
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-      uploadedBy: req.admin._id
+      uploadedBy: req.admin._id,
+      isPublic: isPublic === 'true' || isPublic === true
     });
 
     await fileUpload.save();
+
+    // Send notifications if file is public
+    if (fileUpload.isPublic) {
+      // Use setTimeout to avoid blocking the response
+      setTimeout(() => {
+        sendFileUploadNotifications(fileUpload, req.admin.email || req.admin.phone, req.protocol, req.get('host'));
+      }, 100);
+    }
 
     res.status(201).json({
       message: 'Video uploaded successfully',
@@ -104,13 +149,12 @@ router.post('/upload-video', verifyAdmin, uploadVideoMiddleware, async (req, res
 
 // Upload audio file (pronunciation practice)
 router.post('/upload-audio', verifyAdmin, uploadAudioMiddleware, async (req, res) => {
-  console.log('Audio upload endpoint called');
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No audio file uploaded' });
     }
 
-    const { category, description, tags } = req.body;
+    const { category, description, tags, isPublic = true } = req.body;
     const fileInfo = getFileInfo(req.file);
 
     const fileUpload = new FileUpload({
@@ -118,10 +162,19 @@ router.post('/upload-audio', verifyAdmin, uploadAudioMiddleware, async (req, res
       category: category || 'pronunciation_practice',
       description: description || '',
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-      uploadedBy: req.admin._id
+      uploadedBy: req.admin._id,
+      isPublic: isPublic === 'true' || isPublic === true
     });
 
     await fileUpload.save();
+
+    // Send notifications if file is public
+    if (fileUpload.isPublic) {
+      // Use setTimeout to avoid blocking the response
+      setTimeout(() => {
+        sendFileUploadNotifications(fileUpload, req.admin.email || req.admin.phone, req.protocol, req.get('host'));
+      }, 100);
+    }
 
     res.status(201).json({
       message: 'Audio uploaded successfully',
@@ -139,7 +192,7 @@ router.post('/upload-image', verifyAdmin, uploadImageMiddleware, async (req, res
       return res.status(400).json({ message: 'No image file uploaded' });
     }
 
-    const { category, description, tags } = req.body;
+    const { category, description, tags, isPublic = true } = req.body;
     const fileInfo = getFileInfo(req.file);
 
     const fileUpload = new FileUpload({
@@ -147,10 +200,19 @@ router.post('/upload-image', verifyAdmin, uploadImageMiddleware, async (req, res
       category: category || 'other',
       description: description || '',
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-      uploadedBy: req.admin._id
+      uploadedBy: req.admin._id,
+      isPublic: isPublic === 'true' || isPublic === true
     });
 
     await fileUpload.save();
+
+    // Send notifications if file is public
+    if (fileUpload.isPublic) {
+      // Use setTimeout to avoid blocking the response
+      setTimeout(() => {
+        sendFileUploadNotifications(fileUpload, req.admin.email || req.admin.phone, req.protocol, req.get('host'));
+      }, 100);
+    }
 
     res.status(201).json({
       message: 'Image uploaded successfully',
@@ -168,7 +230,7 @@ router.post('/upload-file', verifyAdmin, uploadAnyFileMiddleware, async (req, re
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const { category, description, tags } = req.body;
+    const { category, description, tags, isPublic = true } = req.body;
     const fileInfo = getFileInfo(req.file);
 
     const fileUpload = new FileUpload({
@@ -176,10 +238,19 @@ router.post('/upload-file', verifyAdmin, uploadAnyFileMiddleware, async (req, re
       category: category || 'other',
       description: description || '',
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-      uploadedBy: req.admin._id
+      uploadedBy: req.admin._id,
+      isPublic: isPublic === 'true' || isPublic === true
     });
 
     await fileUpload.save();
+
+    // Send notifications if file is public
+    if (fileUpload.isPublic) {
+      // Use setTimeout to avoid blocking the response
+      setTimeout(() => {
+        sendFileUploadNotifications(fileUpload, req.admin.email || req.admin.phone, req.protocol, req.get('host'));
+      }, 100);
+    }
 
     res.status(201).json({
       message: 'File uploaded successfully',

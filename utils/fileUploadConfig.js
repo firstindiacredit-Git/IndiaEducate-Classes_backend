@@ -63,12 +63,9 @@ const createUploadConfig = (fileType) => {
       }
     }),
     fileFilter: (req, file, cb) => {
-      // Debug logging
-      console.log(`File upload attempt - File: ${file.originalname}, MimeType: ${file.mimetype}, Expected Type: ${fileType}, Allowed Types: ${allowedMimeTypes.join(', ')}`);
       
       // Check file type by MIME type first
       if (allowedMimeTypes.includes(file.mimetype)) {
-        console.log(`File type validation passed for ${fileType} by MIME type`);
         return cb(null, true);
       }
       
@@ -82,11 +79,9 @@ const createUploadConfig = (fileType) => {
       };
       
       if (allowedExtensions[fileType] && allowedExtensions[fileType].includes(fileExtension)) {
-        console.log(`File type validation passed for ${fileType} by file extension`);
         return cb(null, true);
       }
       
-      console.log(`File type validation failed for ${fileType}`);
       return cb(new Error(`Invalid file type for ${fileType}. Allowed types: ${allowedMimeTypes.join(', ')}`), false);
     },
     limits: {
