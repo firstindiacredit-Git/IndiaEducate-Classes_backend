@@ -462,4 +462,199 @@ router.get('/submission/:submissionId', async (req, res) => {
   }
 });
 
+// Get overall progress statistics
+router.get('/progress', async (req, res) => {
+  try {
+    const { studentEmailOrPhone } = req.query;
+    
+    if (!studentEmailOrPhone) {
+      return res.status(400).json({ message: 'Student email or phone required' });
+    }
+
+    const student = await Student.findOne({
+      $or: [{ email: studentEmailOrPhone }, { phone: studentEmailOrPhone }]
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const now = new Date();
+    
+    // Get ALL assignments that this student has submissions for OR is assigned to
+    const allAssignmentSubmissions = await AssignmentSubmission.find({ 
+      student: student._id
+    }).populate('assignment');
+
+    // Get assignment IDs that the student has submissions for
+    const submittedAssignmentIds = allAssignmentSubmissions.map(s => s.assignment._id);
+
+    // Get assignments assigned to this student OR that the student has submissions for
+    // Remove the isActive and isPublished filters to include all assignments
+    const assignments = await Assignment.find({
+      $or: [
+        { assignedTo: student._id },
+        { assignedTo: { $size: 0 } },
+        { _id: { $in: submittedAssignmentIds } }
+      ]
+    });
+
+    // If no assignments found, include all assignments that student has submissions for
+    if (assignments.length === 0 && submittedAssignmentIds.length > 0) {
+      const submittedAssignments = await Assignment.find({
+        _id: { $in: submittedAssignmentIds }
+      });
+      assignments.push(...submittedAssignments);
+    }
+
+    // Get submissions for the assignments we found
+    const assignmentSubmissions = allAssignmentSubmissions.filter(s => 
+      assignments.some(a => a._id.toString() === s.assignment.toString())
+    );
+
+    // Calculate assignment progress - use all submissions
+    const assignmentStats = {
+      total: allAssignmentSubmissions.length,
+      completed: allAssignmentSubmissions.filter(s => s.status === 'submitted' || s.status === 'reviewed' || s.status === 'approved' || s.status === 'rejected').length,
+      passed: allAssignmentSubmissions.filter(s => s.isPassed).length,
+      inProgress: allAssignmentSubmissions.filter(s => s.status === 'draft').length,
+      notStarted: 0
+    };
+
+    // Get all quizzes assigned to this student (including completed ones)
+    const Quiz = require('../model/quizModel');
+    const QuizSubmission = require('../model/quizSubmissionModel');
+
+    // Get ALL quiz submissions for this student
+    const allQuizSubmissions = await QuizSubmission.find({ 
+      student: student._id
+    }).populate('quiz');
+
+    // Get quiz IDs that the student has submissions for
+    const submittedQuizIds = allQuizSubmissions.map(s => s.quiz._id);
+
+    // Get quizzes assigned to this student OR that the student has submissions for
+    // Remove the isActive and isPublished filters to include all quizzes
+    const quizzes = await Quiz.find({
+      $or: [
+        { assignedTo: student._id },
+        { assignedTo: { $size: 0 } },
+        { _id: { $in: submittedQuizIds } }
+      ]
+    });
+
+    // If no quizzes found, include all quizzes that student has submissions for
+    if (quizzes.length === 0 && submittedQuizIds.length > 0) {
+      const submittedQuizzes = await Quiz.find({
+        _id: { $in: submittedQuizIds }
+      });
+      quizzes.push(...submittedQuizzes);
+    }
+
+    // Get submissions for the quizzes we found
+    const quizSubmissions = allQuizSubmissions.filter(s => 
+      quizzes.some(q => q._id.toString() === s.quiz.toString())
+    );
+
+    // Calculate quiz progress - use all submissions
+    const quizStats = {
+      total: allQuizSubmissions.length,
+      completed: allQuizSubmissions.filter(s => s.status === 'completed').length,
+      passed: allQuizSubmissions.filter(s => s.isPassed).length,
+      inProgress: allQuizSubmissions.filter(s => s.status === 'in_progress').length,
+      notStarted: 0
+    };
+
+    // Get attendance data
+    const Attendance = require('../model/attendanceModel');
+    const ClassSchedule = require('../model/classScheduleModel');
+    
+    // Get all completed/expired classes for the student's program
+    const allClasses = await ClassSchedule.find({
+      program: student.program,
+      status: { $in: ['completed', 'expired'] }
+    });
+
+    // Get all attendance records for this student
+    const studentAttendanceRecords = await Attendance.find({ studentId: student._id });
+
+    // Calculate attendance statistics
+    const attendanceStats = {
+      total: allClasses.length,
+      attended: studentAttendanceRecords.filter(r => r.status === 'present').length,
+      percentage: allClasses.length > 0 ? 
+        Math.round((studentAttendanceRecords.filter(r => r.status === 'present').length / allClasses.length) * 100) : 0
+    };
+
+    // Calculate overall progress
+    const totalActivities = assignmentStats.total + quizStats.total + attendanceStats.total;
+    const completedActivities = assignmentStats.completed + quizStats.completed + attendanceStats.attended;
+    const overallProgress = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
+
+    res.json({
+      overall: {
+        totalActivities,
+        completedActivities,
+        progressPercentage: Math.round(overallProgress),
+        remainingActivities: totalActivities - completedActivities
+      },
+      assignments: assignmentStats,
+      quizzes: quizStats,
+      attendance: attendanceStats,
+      breakdown: {
+        assignments: {
+          total: assignmentStats.total,
+          completed: assignmentStats.completed,
+          percentage: assignmentStats.total > 0 ? Math.round((assignmentStats.completed / assignmentStats.total) * 100) : 0
+        },
+        quizzes: {
+          total: quizStats.total,
+          completed: quizStats.completed,
+          percentage: quizStats.total > 0 ? Math.round((quizStats.completed / quizStats.total) * 100) : 0
+        },
+        attendance: {
+          total: attendanceStats.total,
+          attended: attendanceStats.attended,
+          percentage: attendanceStats.percentage
+        }
+      },
+      // Debug information
+      debug: {
+        studentId: student._id,
+        studentProgram: student.program,
+        totalAssignmentsFound: assignments.length,
+        totalQuizzesFound: quizzes.length,
+        totalAssignmentSubmissions: allAssignmentSubmissions.length,
+        totalQuizSubmissions: allQuizSubmissions.length,
+        submittedAssignmentIds: submittedAssignmentIds,
+        submittedQuizIds: submittedQuizIds,
+        assignmentStats: assignmentStats,
+        quizStats: quizStats,
+        assignmentSubmissions: assignmentSubmissions.map(s => ({
+          assignmentId: s.assignment,
+          status: s.status,
+          isPassed: s.isPassed
+        })),
+        quizSubmissions: quizSubmissions.map(s => ({
+          quizId: s.quiz,
+          status: s.status,
+          isPassed: s.isPassed
+        })),
+        allAssignmentSubmissions: allAssignmentSubmissions.map(s => ({
+          assignmentId: s.assignment,
+          status: s.status,
+          isPassed: s.isPassed
+        })),
+        allQuizSubmissions: allQuizSubmissions.map(s => ({
+          quizId: s.quiz,
+          status: s.status,
+          isPassed: s.isPassed
+        }))
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router; 
