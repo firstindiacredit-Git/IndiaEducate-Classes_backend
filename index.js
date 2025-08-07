@@ -120,6 +120,8 @@ const fileUploadRoutes = require('./controllers/fileUploadController');
 const studentFileRoutes = require('./controllers/studentFileController');
 const quizRoutes = require('./controllers/quizController');
 const studentQuizRoutes = require('./controllers/studentQuizController');
+const assignmentRoutes = require('./controllers/assignmentController');
+const studentAssignmentRoutes = require('./controllers/studentAssignmentController');
 
 // API Routes
 app.use('/api/admin', adminRoutes);
@@ -132,6 +134,8 @@ app.use('/api/admin/files', fileUploadRoutes);
 app.use('/api/student/files', studentFileRoutes);
 app.use('/api/admin/quizzes', quizRoutes);
 app.use('/api/student/quizzes', studentQuizRoutes);
+app.use('/api/admin/assignments', assignmentRoutes);
+app.use('/api/student/assignments', studentAssignmentRoutes);
 
 
 app.use(express.static(path.join(__dirname, 'dist')));

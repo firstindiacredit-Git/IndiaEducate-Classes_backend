@@ -8,7 +8,7 @@ const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const ALLOWED_FILE_TYPES = {
   pdf: ['application/pdf'],
   video: ['video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/webm'],
-  audio: ['audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/aac', 'audio/x-m4a', 'audio/mpeg', 'audio/mp4'],
+  audio: ['audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/aac', 'audio/x-m4a', 'audio/mpeg', 'audio/mp4', 'audio/webm'],
   image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 };
 
@@ -77,7 +77,7 @@ const createUploadConfig = (fileType) => {
       const allowedExtensions = {
         pdf: ['.pdf'],
         video: ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'],
-        audio: ['.mp3', '.wav', '.ogg', '.m4a', '.aac'],
+        audio: ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.webm'],
         image: ['.jpg', '.jpeg', '.png', '.gif', '.webp']
       };
       
