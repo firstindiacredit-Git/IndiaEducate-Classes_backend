@@ -657,4 +657,390 @@ router.get('/progress', async (req, res) => {
   }
 });
 
+// Check for new badges and send notifications
+const checkForNewBadges = async (studentId, currentBadges, previousBadges = []) => {
+  try {
+    const newBadges = currentBadges.filter(currentBadge => 
+      !previousBadges.some(prevBadge => prevBadge.id === currentBadge.id)
+    );
+
+    if (newBadges.length > 0) {
+      // Here you can add notification logic
+      // For now, we'll just log the new badges
+     
+      // You can integrate with your notification system here
+      // For example, send a socket notification or email
+    }
+
+    return newBadges;
+  } catch (err) {
+    console.error('Error checking for new badges:', err);
+    return [];
+  }
+};
+
+// Get detailed progress tracking with badges and achievements
+router.get('/detailed-progress', async (req, res) => {
+  try {
+    const { studentEmailOrPhone } = req.query;
+    
+    if (!studentEmailOrPhone) {
+      return res.status(400).json({ message: 'Student email or phone required' });
+    }
+
+    const student = await Student.findOne({
+      $or: [{ email: studentEmailOrPhone }, { phone: studentEmailOrPhone }]
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Get assignment data
+    const allAssignmentSubmissions = await AssignmentSubmission.find({ 
+      student: student._id
+    }).populate('assignment');
+
+    const assignmentStats = {
+      total: allAssignmentSubmissions.length,
+      completed: allAssignmentSubmissions.filter(s => s.status === 'submitted' || s.status === 'reviewed' || s.status === 'approved' || s.status === 'rejected').length,
+      passed: allAssignmentSubmissions.filter(s => s.isPassed).length,
+      inProgress: allAssignmentSubmissions.filter(s => s.status === 'draft').length,
+      notStarted: 0
+    };
+
+    // Get quiz data
+    const Quiz = require('../model/quizModel');
+    const QuizSubmission = require('../model/quizSubmissionModel');
+
+    const allQuizSubmissions = await QuizSubmission.find({ 
+      student: student._id
+    }).populate('quiz');
+
+    const quizStats = {
+      total: allQuizSubmissions.length,
+      completed: allQuizSubmissions.filter(s => s.status === 'completed').length,
+      passed: allQuizSubmissions.filter(s => s.isPassed).length,
+      inProgress: allQuizSubmissions.filter(s => s.status === 'in_progress').length,
+      notStarted: 0
+    };
+
+    // Get attendance data
+    const Attendance = require('../model/attendanceModel');
+    const ClassSchedule = require('../model/classScheduleModel');
+    
+    const allClasses = await ClassSchedule.find({
+      program: student.program,
+      status: { $in: ['completed', 'expired'] }
+    });
+
+    const studentAttendanceRecords = await Attendance.find({ studentId: student._id });
+
+    const attendanceStats = {
+      total: allClasses.length,
+      attended: studentAttendanceRecords.filter(r => r.status === 'present').length,
+      partial: studentAttendanceRecords.filter(r => r.status === 'partial').length,
+      absent: studentAttendanceRecords.filter(r => r.status === 'absent').length,
+      percentage: allClasses.length > 0 ? 
+        Math.round((studentAttendanceRecords.filter(r => r.status === 'present').length / allClasses.length) * 100) : 0
+    };
+
+    // Calculate overall progress
+    const totalActivities = assignmentStats.total + quizStats.total + attendanceStats.total;
+    const completedActivities = assignmentStats.completed + quizStats.completed + attendanceStats.attended;
+    const overallProgress = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
+
+    // Calculate skill-specific progress
+    const skillProgress = {
+      pronunciation: {
+        assignments: allAssignmentSubmissions.filter(s => s.assignment?.subject === 'english' && s.isPassed).length,
+        quizzes: allQuizSubmissions.filter(s => s.quiz?.subject === 'english' && s.isPassed).length,
+        total: 0,
+        percentage: 0
+      },
+      grammar: {
+        assignments: allAssignmentSubmissions.filter(s => s.assignment?.subject === 'english' && s.isPassed).length,
+        quizzes: allQuizSubmissions.filter(s => s.quiz?.subject === 'english' && s.isPassed).length,
+        total: 0,
+        percentage: 0
+      },
+      vocabulary: {
+        assignments: allAssignmentSubmissions.filter(s => s.assignment?.subject === 'english' && s.isPassed).length,
+        quizzes: allQuizSubmissions.filter(s => s.quiz?.subject === 'english' && s.isPassed).length,
+        total: 0,
+        percentage: 0
+      },
+      listening: {
+        assignments: allAssignmentSubmissions.filter(s => s.assignment?.type === 'audio' && s.isPassed).length,
+        quizzes: allQuizSubmissions.filter(s => s.quiz?.type === 'listening' && s.isPassed).length,
+        total: 0,
+        percentage: 0
+      },
+      speaking: {
+        assignments: allAssignmentSubmissions.filter(s => s.assignment?.type === 'video' && s.isPassed).length,
+        quizzes: allQuizSubmissions.filter(s => s.quiz?.type === 'speaking' && s.isPassed).length,
+        total: 0,
+        percentage: 0
+      }
+    };
+
+    // Calculate percentages for each skill
+    Object.keys(skillProgress).forEach(skill => {
+      const skillData = skillProgress[skill];
+      skillData.total = skillData.assignments + skillData.quizzes;
+      skillData.percentage = skillData.total > 0 ? Math.round((skillData.total / (skillData.total + 5)) * 100) : 0; // Assuming 5 activities per skill
+    });
+
+    // Generate badges based on achievements
+    const badges = [];
+    
+    // Overall progress badges
+    if (overallProgress >= 90) {
+      badges.push({
+        id: 'master_learner',
+        name: 'Master Learner',
+        description: 'Achieved 90%+ overall progress',
+        icon: '🏆',
+        color: '#FFD700',
+        category: 'overall'
+      });
+    } else if (overallProgress >= 75) {
+      badges.push({
+        id: 'excellent_progress',
+        name: 'Excellent Progress',
+        description: 'Achieved 75%+ overall progress',
+        icon: '⭐',
+        color: '#52c41a',
+        category: 'overall'
+      });
+    } else if (overallProgress >= 50) {
+      badges.push({
+        id: 'good_progress',
+        name: 'Good Progress',
+        description: 'Achieved 50%+ overall progress',
+        icon: '👍',
+        color: '#1890ff',
+        category: 'overall'
+      });
+    }
+
+    // Assignment badges
+    if (assignmentStats.passed >= 10) {
+      badges.push({
+        id: 'assignment_master',
+        name: 'Assignment Master',
+        description: 'Completed 10+ assignments successfully',
+        icon: '📝',
+        color: '#722ed1',
+        category: 'assignments'
+      });
+    } else if (assignmentStats.passed >= 5) {
+      badges.push({
+        id: 'assignment_expert',
+        name: 'Assignment Expert',
+        description: 'Completed 5+ assignments successfully',
+        icon: '📋',
+        color: '#1890ff',
+        category: 'assignments'
+      });
+    }
+
+    // Quiz badges
+    if (quizStats.passed >= 10) {
+      badges.push({
+        id: 'quiz_master',
+        name: 'Quiz Master',
+        description: 'Passed 10+ quizzes',
+        icon: '🧠',
+        color: '#52c41a',
+        category: 'quizzes'
+      });
+    } else if (quizStats.passed >= 5) {
+      badges.push({
+        id: 'quiz_expert',
+        name: 'Quiz Expert',
+        description: 'Passed 5+ quizzes',
+        icon: '❓',
+        color: '#faad14',
+        category: 'quizzes'
+      });
+    }
+
+    // Attendance badges
+    if (attendanceStats.percentage >= 95) {
+      badges.push({
+        id: 'perfect_attendance',
+        name: 'Perfect Attendance',
+        description: '95%+ attendance rate',
+        icon: '🎯',
+        color: '#52c41a',
+        category: 'attendance'
+      });
+    } else if (attendanceStats.percentage >= 80) {
+      badges.push({
+        id: 'regular_attender',
+        name: 'Regular Attender',
+        description: '80%+ attendance rate',
+        icon: '📅',
+        color: '#1890ff',
+        category: 'attendance'
+      });
+    }
+
+    // Skill-specific badges
+    if (skillProgress.pronunciation.percentage >= 80) {
+      badges.push({
+        id: 'pronunciation_pro',
+        name: 'Pronunciation Pro',
+        description: 'Excellent pronunciation skills',
+        icon: '🗣️',
+        color: '#eb2f96',
+        category: 'skills'
+      });
+    }
+
+    if (skillProgress.grammar.percentage >= 80) {
+      badges.push({
+        id: 'grammar_guru',
+        name: 'Grammar Guru',
+        description: 'Mastered grammar concepts',
+        icon: '📚',
+        color: '#722ed1',
+        category: 'skills'
+      });
+    }
+
+    if (skillProgress.vocabulary.percentage >= 80) {
+      badges.push({
+        id: 'vocabulary_virtuoso',
+        name: 'Vocabulary Virtuoso',
+        description: 'Expanded vocabulary significantly',
+        icon: '📖',
+        color: '#52c41a',
+        category: 'skills'
+      });
+    }
+
+    if (skillProgress.listening.percentage >= 80) {
+      badges.push({
+        id: 'listening_legend',
+        name: 'Listening Legend',
+        description: 'Excellent listening comprehension',
+        icon: '👂',
+        color: '#1890ff',
+        category: 'skills'
+      });
+    }
+
+    if (skillProgress.speaking.percentage >= 80) {
+      badges.push({
+        id: 'speaking_star',
+        name: 'Speaking Star',
+        description: 'Outstanding speaking skills',
+        icon: '🎤',
+        color: '#faad14',
+        category: 'skills'
+      });
+    }
+
+    // Streak badges
+    const recentSubmissions = allAssignmentSubmissions
+      .concat(allQuizSubmissions)
+      .filter(s => {
+        const submissionDate = new Date(s.createdAt || s.submittedAt);
+        const daysDiff = (new Date() - submissionDate) / (1000 * 60 * 60 * 24);
+        return daysDiff <= 7;
+      });
+
+    if (recentSubmissions.length >= 5) {
+      badges.push({
+        id: 'consistent_learner',
+        name: 'Consistent Learner',
+        description: 'Completed 5+ activities this week',
+        icon: '🔥',
+        color: '#ff4d4f',
+        category: 'streak'
+      });
+    }
+
+    // First achievement badges
+    if (assignmentStats.passed >= 1) {
+      badges.push({
+        id: 'first_assignment',
+        name: 'First Assignment',
+        description: 'Completed your first assignment',
+        icon: '🎉',
+        color: '#52c41a',
+        category: 'milestone'
+      });
+    }
+
+    if (quizStats.passed >= 1) {
+      badges.push({
+        id: 'first_quiz',
+        name: 'First Quiz',
+        description: 'Passed your first quiz',
+        icon: '🎊',
+        color: '#1890ff',
+        category: 'milestone'
+      });
+    }
+
+    // Check for new badges (you can store previous badges in student profile or separate collection)
+    const newBadges = await checkForNewBadges(student._id, badges);
+
+    res.json({
+      student: {
+        id: student._id,
+        name: student.fullName,
+        program: student.program
+      },
+      overall: {
+        totalActivities,
+        completedActivities,
+        progressPercentage: Math.round(overallProgress),
+        remainingActivities: totalActivities - completedActivities
+      },
+      breakdown: {
+        assignments: {
+          total: assignmentStats.total,
+          completed: assignmentStats.completed,
+          passed: assignmentStats.passed,
+          percentage: assignmentStats.total > 0 ? Math.round((assignmentStats.completed / assignmentStats.total) * 100) : 0
+        },
+        quizzes: {
+          total: quizStats.total,
+          completed: quizStats.completed,
+          passed: quizStats.passed,
+          percentage: quizStats.total > 0 ? Math.round((quizStats.completed / quizStats.total) * 100) : 0
+        },
+        attendance: {
+          total: attendanceStats.total,
+          attended: attendanceStats.attended,
+          partial: attendanceStats.partial,
+          absent: attendanceStats.absent,
+          percentage: attendanceStats.percentage
+        }
+      },
+      skills: skillProgress,
+      badges: badges,
+      newBadges: newBadges, // Include new badges in response
+      achievements: {
+        totalBadges: badges.length,
+        categories: {
+          overall: badges.filter(b => b.category === 'overall').length,
+          assignments: badges.filter(b => b.category === 'assignments').length,
+          quizzes: badges.filter(b => b.category === 'quizzes').length,
+          attendance: badges.filter(b => b.category === 'attendance').length,
+          skills: badges.filter(b => b.category === 'skills').length,
+          streak: badges.filter(b => b.category === 'streak').length,
+          milestone: badges.filter(b => b.category === 'milestone').length
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router; 

@@ -122,6 +122,7 @@ const quizRoutes = require('./controllers/quizController');
 const studentQuizRoutes = require('./controllers/studentQuizController');
 const assignmentRoutes = require('./controllers/assignmentController');
 const studentAssignmentRoutes = require('./controllers/studentAssignmentController');
+const certificateRoutes = require('./controllers/certificateController');
 
 // API Routes
 app.use('/api/admin', adminRoutes);
@@ -136,6 +137,7 @@ app.use('/api/admin/quizzes', quizRoutes);
 app.use('/api/student/quizzes', studentQuizRoutes);
 app.use('/api/admin/assignments', assignmentRoutes);
 app.use('/api/student/assignments', studentAssignmentRoutes);
+app.use('/api/certificates', certificateRoutes);
 
 
 app.use(express.static(path.join(__dirname, 'dist')));
