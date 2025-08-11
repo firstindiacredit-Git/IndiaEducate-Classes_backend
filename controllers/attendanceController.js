@@ -9,7 +9,7 @@ router.post('/join', async (req, res) => {
   try {
     const { classId, studentId, isReconnect = false } = req.body;
 
-    // Check if class exists and is ongoing
+    // Check if class exists and is ongoing (exclude expired sessions)
     const classSession = await ClassSchedule.findOne({
       _id: classId,
       status: 'ongoing'
@@ -65,7 +65,7 @@ router.post('/reconnect', async (req, res) => {
   try {
     const { classId, studentId } = req.body;
 
-    // Check if class exists and is ongoing
+    // Check if class exists and is ongoing (exclude expired sessions)
     const classSession = await ClassSchedule.findOne({
       _id: classId,
       status: 'ongoing'
@@ -219,8 +219,9 @@ router.get('/class/:classId', async (req, res) => {
 // Get attendance summary for all classes
 router.get('/summary', async (req, res) => {
   try {
+    // Only include completed classes, exclude expired sessions
     const classes = await ClassSchedule.find({
-      status: { $in: ['completed', 'expired'] }
+      status: 'completed'
     }).lean();
 
     const summary = await Promise.all(classes.map(async (classSession) => {
@@ -258,10 +259,10 @@ router.get('/student/:studentId', async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    // Get all completed/expired classes for the student's program
+    // Get only completed classes for the student's program (exclude expired sessions)
     const allClasses = await ClassSchedule.find({
       program: student.program,
-      status: { $in: ['completed', 'expired'] }
+      status: 'completed'
     }).lean();
 
     // Get all attendance records for this student
@@ -337,10 +338,10 @@ router.get('/debug/student/:studentId', async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    // Get all classes for the student's program
+    // Get only completed classes for the student's program (exclude expired sessions)
     const allClasses = await ClassSchedule.find({
       program: student.program,
-      status: { $in: ['completed', 'expired'] }
+      status: 'completed'
     }).lean();
 
     // Get student's attendance records

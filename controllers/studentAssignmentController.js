@@ -569,10 +569,10 @@ router.get('/progress', async (req, res) => {
     const Attendance = require('../model/attendanceModel');
     const ClassSchedule = require('../model/classScheduleModel');
     
-    // Get all completed/expired classes for the student's program
+    // Get only completed classes for the student's program (exclude expired sessions)
     const allClasses = await ClassSchedule.find({
       program: student.program,
-      status: { $in: ['completed', 'expired'] }
+      status: 'completed'
     });
 
     // Get all attendance records for this student
@@ -731,7 +731,7 @@ router.get('/detailed-progress', async (req, res) => {
     
     const allClasses = await ClassSchedule.find({
       program: student.program,
-      status: { $in: ['completed', 'expired'] }
+      status: 'completed'
     });
 
     const studentAttendanceRecords = await Attendance.find({ studentId: student._id });
