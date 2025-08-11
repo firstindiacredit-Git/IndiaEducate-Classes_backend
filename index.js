@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const http = require('http');
+const { setupPeriodicCleanup } = require('./utils/cleanupUtils');
 
 const path = require("path");
 
@@ -158,4 +159,7 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, async () => {
   await connectDB();
   console.log(`Server running on port ${PORT}`);
+  
+  // Setup periodic cleanup for expired pending registrations
+  setupPeriodicCleanup();
 });

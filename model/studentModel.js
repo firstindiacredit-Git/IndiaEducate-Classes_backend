@@ -45,4 +45,33 @@ const studentSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
+// Schema for pending student registrations (before OTP verification)
+const pendingStudentSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    lowercase: true,
+  },
+  phone: {
+    type: String,
+    required: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+  otp: {
+    type: String,
+    required: true,
+  },
+  otpExpires: {
+    type: Date,
+    required: true,
+  },
+}, { timestamps: true });
+
+// Add index to automatically delete expired pending registrations
+pendingStudentSchema.index({ otpExpires: 1 }, { expireAfterSeconds: 0 });
+
 module.exports = mongoose.model('Student', studentSchema);
+module.exports.PendingStudent = mongoose.model('PendingStudent', pendingStudentSchema);
