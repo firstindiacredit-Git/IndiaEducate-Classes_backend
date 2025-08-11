@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const Student = require('../model/studentModel');
 const { sendOTPEmail } = require('../utils/emailService');
-const { uploadMiddleware, deleteFileFromS3 } = require('../utils/multerConfig');
+const { profileUploadMiddleware, deleteFileFromS3 } = require('../utils/multerConfig');
 
 const router = express.Router();
 
@@ -171,7 +171,7 @@ router.post('/profile', async (req, res) => {
 });
 
 // Update Student Profile with file upload
-router.put('/profile', uploadMiddleware, async (req, res) => {
+router.put('/profile', profileUploadMiddleware, async (req, res) => {
   try {
     const { emailOrPhone, fullName, country, enrollmentId, program } = req.body;
     if (!emailOrPhone) {

@@ -123,6 +123,8 @@ const studentQuizRoutes = require('./controllers/studentQuizController');
 const assignmentRoutes = require('./controllers/assignmentController');
 const studentAssignmentRoutes = require('./controllers/studentAssignmentController');
 const certificateRoutes = require('./controllers/certificateController');
+const ticketRoutes = require('./controllers/ticketController');
+const contactRoutes = require('./controllers/contactController');
 
 // API Routes
 app.use('/api/admin', adminRoutes);
@@ -138,6 +140,8 @@ app.use('/api/student/quizzes', studentQuizRoutes);
 app.use('/api/admin/assignments', assignmentRoutes);
 app.use('/api/student/assignments', studentAssignmentRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/contact', contactRoutes);
 
 
 app.use(express.static(path.join(__dirname, 'dist')));

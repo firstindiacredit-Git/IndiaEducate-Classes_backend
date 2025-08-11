@@ -786,6 +786,97 @@ async function sendQuizReviewNotificationEmail(to, params) {
   await sendEmail(to, subject_line, htmlContent);
 }
 
+// Contact Notification Email
+async function sendContactNotificationEmail(params) {
+  const { admins, contactData } = params;
+  
+  const subject_line = 'New Contact Form Submission - IndiaEducates';
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>New Contact Form Submission</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .contact-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }
+        .priority { display: inline-block; background: #ff6b6b; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .category { display: inline-block; background: #764ba2; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; margin-left: 10px; }
+        .message-box { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #17a2b8; }
+        .education-info { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #17a2b8; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📧 New Contact Form Submission</h1>
+          <p>Hello Admin Team,</p>
+        </div>
+        
+        <div class="content">
+          <p>A new contact form has been submitted by a student. Please review the details below:</p>
+          
+          <div class="contact-info">
+            <h3>📋 Contact Details</h3>
+            <p><strong>Student Name:</strong> ${contactData.studentName}</p>
+            <p><strong>Email:</strong> ${contactData.studentEmail}</p>
+            <p><strong>Phone:</strong> ${contactData.studentPhone}</p>
+            <p><strong>Service:</strong> ${contactData.service.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+            <p><span class="service">${contactData.service.replace(/_/g, ' ').toUpperCase()}</span></p>
+          </div>
+          
+          ${contactData.degree ? `
+          <div class="education-info">
+            <h4>🎓 Educational Background</h4>
+            <p><strong>Selected Degree:</strong> ${contactData.degree === 'bachelor' ? 'Bachelor Degree' : 'Master Degree'}</p>
+          </div>
+          ` : ''}
+          
+          <div class="message-box">
+            <h4>💬 Message</h4>
+            <p>${contactData.message}</p>
+          </div>
+          
+          <p><strong>Submitted at:</strong> ${new Date().toLocaleString('en-US', { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          })} (IST)</p>
+          
+          <p style="margin-top: 30px;">
+            <strong>Best regards,</strong><br>
+            IndiaEducates System
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>This is an automated notification from IndiaEducates Learning Platform</p>
+          <p>Please respond to this inquiry promptly to maintain excellent customer service.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Send email to all admins
+  for (const admin of admins) {
+    try {
+      await sendEmail(admin.email, subject_line, htmlContent);
+    } catch (error) {
+      console.error(`Failed to send contact notification to ${admin.email}:`, error);
+    }
+  }
+}
+
 module.exports = {
   sendOTPEmail,
   sendCredentialsEmail,
@@ -799,5 +890,6 @@ module.exports = {
   sendWeeklyTestNotificationEmail,
   sendAssignmentNotificationEmail,
   sendAssignmentReviewNotificationEmail,
-  sendQuizReviewNotificationEmail
+  sendQuizReviewNotificationEmail,
+  sendContactNotificationEmail
 };

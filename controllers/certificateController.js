@@ -613,7 +613,7 @@ const convertHTMLToPDFBuffer = async (htmlContent, certificateNumber) => {
   } catch (error) {
     console.error('Error converting HTML to PDF:', error);
     // If PDF conversion fails, return HTML content as buffer
-    console.log('Falling back to HTML certificate');
+    // console.log('Falling back to HTML certificate');
     return Buffer.from(htmlContent, 'utf8');
   }
 };
