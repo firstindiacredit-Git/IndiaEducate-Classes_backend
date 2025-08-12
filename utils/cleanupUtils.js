@@ -25,7 +25,7 @@ function setupPeriodicCleanup() {
     }
   }, 30 * 60 * 1000); // 30 minutes in milliseconds
   
-  console.log('Periodic cleanup setup complete - will run every 30 minutes');
+  // console.log('Periodic cleanup setup complete - will run every 30 minutes');
 }
 
 module.exports = {
