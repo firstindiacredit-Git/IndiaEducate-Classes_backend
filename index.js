@@ -127,6 +127,7 @@ const certificateRoutes = require('./controllers/certificateController');
 const ticketRoutes = require('./controllers/ticketController');
 const contactRoutes = require('./controllers/contactController');
 const faqRoutes = require('./controllers/faqController');
+const paymentRoutes = require('./controllers/paymentController');
 
 // API Routes
 app.use('/api/admin', adminRoutes);
@@ -145,6 +146,7 @@ app.use('/api/certificates', certificateRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/faq', faqRoutes);
+app.use('/api/payments', paymentRoutes);
 
 
 app.use(express.static(path.join(__dirname, 'dist')));
