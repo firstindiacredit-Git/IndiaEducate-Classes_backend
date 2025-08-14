@@ -126,7 +126,7 @@ Here are your login credentials:
 Email/Username: ${email}
 Password: ${password}
 
-Please login using these credentials at: ${process.env.FRONTEND_URL || 'http://localhost:5173'}
+Please login using these credentials at: ${process.env.FRONTEND_URL}
 
 For security reasons, we recommend changing your password after your first login.
 
@@ -157,7 +157,7 @@ Country: ${studentDetails.country || 'Not Set'}
 Enrollment ID: ${studentDetails.enrollmentId || 'Not Set'}
 ${newPassword ? `\nYour password has been updated. New password: ${newPassword}` : ''}
 
-You can login at: ${process.env.FRONTEND_URL || 'http://localhost:5173'}
+You can login at: ${process.env.FRONTEND_URL}
 ${newPassword ? '\nFor security reasons, we recommend changing your password after your next login.' : ''}
 
 If you have any questions about these changes, please contact our support team.
